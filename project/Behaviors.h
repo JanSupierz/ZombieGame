@@ -19,9 +19,58 @@
 
 namespace BT_Actions
 {
+	//Cells
+
+	Elite::BehaviorState SetBestCellAsTarget(Elite::Blackboard* pBlackboard)
+	{
+		std::vector<GridElement*>* pGrid{};
+
+		if (pBlackboard->GetData("GridVector", pGrid) == false || pGrid == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		AgentInfo* pAgentInfo;
+
+		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		float cellSize;
+
+		if (pBlackboard->GetData("CellSize", cellSize) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		IExamInterface* pInterface;
+		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		Elite::Vector2 target{};
+		float bestInfluence{ 0 };
+
+		for (GridElement* pGridElement : *pGrid)
+		{	
+			if (pGridElement->Influence < bestInfluence) continue;
+			
+			bestInfluence = pGridElement->Influence;
+			target = pGridElement->Position;
+		}
+
+		target = pInterface->NavMesh_GetClosestPathPoint(target);
+		pBlackboard->ChangeData("Target", target);
+
+		return Elite::BehaviorState::Success;
+	}
+
+	//Rotation
+
 	Elite::BehaviorState InitializeRotating(Elite::Blackboard* pBlackboard)
 	{
-		std::cout << "Init rotation\n";
 		bool* pIsRotating{};
 
 		if (pBlackboard->GetData("IsRotating", pIsRotating) == false || pIsRotating == nullptr)
@@ -74,85 +123,7 @@ namespace BT_Actions
 		return Elite::BehaviorState::Success;
 	}
 
-	Elite::BehaviorState SetClosestNotVisitedSearchPointAsTarget(Elite::Blackboard* pBlackboard)
-	{
-		AgentInfo* pAgentInfo;
-		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false)
-		{
-			return Elite::BehaviorState::Failure;
-		}
-
-		House* pHouse{};
-		if (pBlackboard->GetData("TargetHouse", pHouse) == false || pHouse == nullptr)
-		{
-			return Elite::BehaviorState::Failure;
-		}
-
-		SearchPoint* pClosestSearchPoint{};
-		float closestDistSq{ INFINITY };
-
-		for (auto& pSearchPoint : pHouse->pSearchPoints)
-		{
-			if (pSearchPoint->isVisited == true) continue;
-
-			float distSq = pSearchPoint->position.DistanceSquared(pAgentInfo->Position);
-
-			if (distSq < closestDistSq)
-			{
-				closestDistSq = distSq;
-				pClosestSearchPoint = pSearchPoint;
-			}
-		}
-
-		pBlackboard->ChangeData("Target", pClosestSearchPoint->position);
-
-		return Elite::BehaviorState::Success;
-	}
-
-	Elite::BehaviorState SetClosestNotVisitedHouseAsTarget(Elite::Blackboard* pBlackboard)
-	{
-		AgentInfo* pAgentInfo;
-		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false)
-		{
-			return Elite::BehaviorState::Failure;
-		}
-
-		std::vector<House*>* pHouse;
-
-		if (pBlackboard->GetData("HouseVector", pHouse) == false || pHouse == nullptr)
-		{
-			return Elite::BehaviorState::Failure;
-		}
-
-		House* pClosestSearchPoint{};
-		float closestDistSq{ INFINITY };
-
-		for (auto& pHouse : *pHouse)
-		{
-			if (pHouse->isVisited == true) continue;
-
-			float distSq = pHouse->Center.DistanceSquared(pAgentInfo->Position);
-
-			if (distSq < closestDistSq)
-			{
-				closestDistSq = distSq;
-				pClosestSearchPoint = pHouse;
-			}
-		}
-
-		IExamInterface* pInterface;
-		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
-		{
-			return Elite::BehaviorState::Failure;
-		}
-
-		const Elite::Vector2 target{ pInterface->NavMesh_GetClosestPathPoint(pClosestSearchPoint->Center) };
-
-		pBlackboard->ChangeData("Target", target);
-		pBlackboard->ChangeData("TargetHouse", pClosestSearchPoint);
-
-		return Elite::BehaviorState::Success;
-	}
+	//Items
 
 	Elite::BehaviorState SetClosestItemAsTarget(Elite::Blackboard* pBlackboard)
 	{
@@ -192,6 +163,159 @@ namespace BT_Actions
 		return Elite::BehaviorState::Success;
 	}
 
+	Elite::BehaviorState DestroyItem(Elite::Blackboard* pBlackboard)
+	{
+
+		IExamInterface* pInterface;
+
+		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		std::pair<EntityInfo, ItemInfo> item;
+
+		if (pBlackboard->GetData("TargetItem", item) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		if (pInterface->Item_Destroy(item.first))
+		{
+			std::vector<std::pair<EntityInfo, ItemInfo>>* pItemVector;
+
+			if (pBlackboard->GetData("ItemVector", pItemVector) == false || pItemVector == nullptr)
+			{
+				return Elite::BehaviorState::Failure;
+			}
+
+			auto remover = [&](std::pair<EntityInfo, ItemInfo> itemInVector)->bool
+			{
+				return item.first.EntityHash == itemInVector.first.EntityHash;
+			};
+
+			pItemVector->erase(std::remove_if(pItemVector->begin(), pItemVector->end(), remover), pItemVector->end());
+
+			return Elite::BehaviorState::Success;
+		}
+
+		return Elite::BehaviorState::Failure;
+	}
+
+	Elite::BehaviorState HandleItemGrabbing(Elite::Blackboard* pBlackboard)
+	{
+
+		IExamInterface* pInterface;
+
+		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		UINT* pNextFreeSlot{};
+		if (pBlackboard->GetData("NextFreeSlot", pNextFreeSlot) == false || pNextFreeSlot == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		UINT nrSlots{pInterface->Inventory_GetCapacity()};
+		std::cout << nrSlots << '\n';
+		std::pair<EntityInfo,ItemInfo> item;
+
+		if (pBlackboard->GetData("TargetItem", item) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		if (pInterface->Item_Grab(item.first, item.second))
+		{
+			UINT slotIndex{ *pNextFreeSlot };
+			bool shouldAddItem{ true };
+
+			//No free space
+			if (*pNextFreeSlot >= nrSlots)
+			{
+				ItemInfo inventoryItem{};
+				for (UINT index{}; index < nrSlots; ++index)
+				{
+					pInterface->Inventory_GetItem(slotIndex, inventoryItem);
+
+					if (inventoryItem.Type == item.second.Type)
+					{
+						switch (inventoryItem.Type)
+						{
+						case eItemType::PISTOL:
+						case eItemType::SHOTGUN:
+							shouldAddItem = pInterface->Weapon_GetAmmo(item.second) > pInterface->Weapon_GetAmmo(inventoryItem);
+							break;
+						case eItemType::FOOD:
+							shouldAddItem = pInterface->Food_GetEnergy(item.second) > pInterface->Food_GetEnergy(inventoryItem);
+							break;
+						case eItemType::MEDKIT:
+							shouldAddItem = pInterface->Medkit_GetHealth(item.second) > pInterface->Medkit_GetHealth(inventoryItem);
+							break;
+						}
+
+						if (shouldAddItem)
+						{
+							slotIndex = index;
+							break;
+						}
+					}
+				}
+			}
+
+			//Add item
+			if (shouldAddItem)
+			{
+				pInterface->Inventory_AddItem(slotIndex, item.second);
+				++(*pNextFreeSlot);
+
+				std::vector<std::pair<EntityInfo, ItemInfo>>* pItemVector;
+
+				if (pBlackboard->GetData("ItemVector", pItemVector) == false || pItemVector == nullptr)
+				{
+					return Elite::BehaviorState::Failure;
+				}
+
+				auto remover = [&](std::pair<EntityInfo, ItemInfo> itemInVector)->bool
+				{
+					return item.first.EntityHash == itemInVector.first.EntityHash;
+				};
+
+				pItemVector->erase(std::remove_if(pItemVector->begin(), pItemVector->end(), remover), pItemVector->end());
+			}
+			//Leave on ground
+			else
+			{
+				//Mark as used + save
+				std::cout << "Item destroyed -> later: it will be marked as found\n";
+
+				pInterface->Item_Destroy(item.first);
+
+				std::vector<std::pair<EntityInfo, ItemInfo>>* pItemVector;
+
+				if (pBlackboard->GetData("ItemVector", pItemVector) == false || pItemVector == nullptr)
+				{
+					return Elite::BehaviorState::Failure;
+				}
+
+				auto remover = [&](std::pair<EntityInfo, ItemInfo> itemInVector)->bool
+				{
+					return item.first.EntityHash == itemInVector.first.EntityHash;
+				};
+
+				pItemVector->erase(std::remove_if(pItemVector->begin(), pItemVector->end(), remover), pItemVector->end());
+			}
+
+			return Elite::BehaviorState::Success;
+		}
+
+		return Elite::BehaviorState::Failure;
+	}
+	
+	//Change Steering
+
 	Elite::BehaviorState ChangeToRotateClockWise(Elite::Blackboard* pBlackboard)
 	{
 		ISteeringBehavior* pCurrentSteering;
@@ -215,7 +339,7 @@ namespace BT_Actions
 	Elite::BehaviorState ChangeToWander(Elite::Blackboard* pBlackboard)
 	{
 		ISteeringBehavior* pCurrentSteering;
-		
+
 		Wander* pWander;
 		if (pBlackboard->GetData("Wander", pWander) == false || pWander == nullptr)
 		{
@@ -231,90 +355,119 @@ namespace BT_Actions
 
 		return Elite::BehaviorState::Failure;
 	}
-		
-	Elite::BehaviorState GrabItem(Elite::Blackboard* pBlackboard)
+
+	Elite::BehaviorState ChangeToFleeTarget(Elite::Blackboard* pBlackboard)
 	{
+		ISteeringBehavior* pCurrentSteering;
 
-		IExamInterface* pInterface;
-
-		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
+		Flee* pFlee;
+		if (pBlackboard->GetData("Flee", pFlee) == false || pFlee == nullptr)
 		{
 			return Elite::BehaviorState::Failure;
 		}
 
-		std::pair<EntityInfo,ItemInfo> item;
-
-		if (pBlackboard->GetData("TargetItem", item) == false)
+		Elite::Vector2 target;
+		if (pBlackboard->GetData("Target", target) == false)
 		{
 			return Elite::BehaviorState::Failure;
 		}
 
-		std::cout << item.second.ItemHash << '\n';
+		pFlee->SetTarget(target);
 
-		if (pInterface->Item_Grab(item.first, item.second))
+		pCurrentSteering = pFlee;
+
+		if (pBlackboard->ChangeData("CurrentSteering", pCurrentSteering))
 		{
-
-			pInterface->Inventory_AddItem(0, item.second);
-
-			std::vector<std::pair<EntityInfo, ItemInfo>>* pItemVector;
-
-			if (pBlackboard->GetData("ItemVector", pItemVector) == false || pItemVector == nullptr)
-			{
-				return Elite::BehaviorState::Failure;
-			}
-
-			auto remover = [&](std::pair<EntityInfo, ItemInfo> itemInVector)->bool 
-			{
-				return item.first.EntityHash == itemInVector.first.EntityHash; 
-			};
-
-			pItemVector->erase(std::remove_if(pItemVector->begin(), pItemVector->end(), remover),pItemVector->end());
-
 			return Elite::BehaviorState::Success;
 		}
 
 		return Elite::BehaviorState::Failure;
 	}
-	
-	Elite::BehaviorState DestroyItem(Elite::Blackboard* pBlackboard)
+
+	Elite::BehaviorState ChangeToFaceAndSeekTarget(Elite::Blackboard* pBlackboard)
 	{
+		ISteeringBehavior* pCurrentSteering;
 
-		IExamInterface* pInterface;
-
-		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
+		Seek* pSeek;
+		if (pBlackboard->GetData("Seek", pSeek) == false || pSeek == nullptr)
 		{
 			return Elite::BehaviorState::Failure;
 		}
 
-		std::pair<EntityInfo, ItemInfo> item;
-
-		if (pBlackboard->GetData("TargetItem", item) == false)
+		Face* pFace;
+		if (pBlackboard->GetData("Face", pFace) == false || pFace == nullptr)
 		{
 			return Elite::BehaviorState::Failure;
 		}
 
-		std::cout << item.second.ItemHash << '\n';
-
-		if (pInterface->Item_Destroy(item.first))
+		PrioritySteering* pFaceAndSeek;
+		if (pBlackboard->GetData("FaceAndSeek", pFaceAndSeek) == false || pFaceAndSeek == nullptr)
 		{
-			std::vector<std::pair<EntityInfo, ItemInfo>>* pItemVector;
+			return Elite::BehaviorState::Failure;
+		}
 
-			if (pBlackboard->GetData("ItemVector", pItemVector) == false || pItemVector == nullptr)
-			{
-				return Elite::BehaviorState::Failure;
-			}
+		Elite::Vector2 target;
+		if (pBlackboard->GetData("Target", target) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
 
-			auto remover = [&](std::pair<EntityInfo, ItemInfo> itemInVector)->bool
-			{
-				return item.first.EntityHash == itemInVector.first.EntityHash;
-			};
+		pFace->SetTarget(target);
+		pSeek->SetTarget(target);
 
-			pItemVector->erase(std::remove_if(pItemVector->begin(), pItemVector->end(), remover), pItemVector->end());
+		pCurrentSteering = pFaceAndSeek;
 
+		if (pBlackboard->ChangeData("CurrentSteering", pCurrentSteering))
+		{
 			return Elite::BehaviorState::Success;
 		}
+		else
+		{
+			return Elite::BehaviorState::Failure;
+		}
+	}
 
-		return Elite::BehaviorState::Failure;
+	Elite::BehaviorState ChangeToSeekAndFaceTarget(Elite::Blackboard* pBlackboard)
+	{
+		ISteeringBehavior* pCurrentSteering;
+
+		Seek* pSeek;
+		if (pBlackboard->GetData("Seek", pSeek) == false || pSeek == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		Face* pFace;
+		if (pBlackboard->GetData("Face", pFace) == false || pFace == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		AddedSteering* pSeekAndFace;
+		if (pBlackboard->GetData("SeekAndFace", pSeekAndFace) == false || pSeekAndFace == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		Elite::Vector2 target;
+		if (pBlackboard->GetData("Target", target) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		pFace->SetTarget(target);
+		pSeek->SetTarget(target);
+
+		pCurrentSteering = pSeekAndFace;
+
+		if (pBlackboard->ChangeData("CurrentSteering", pCurrentSteering))
+		{
+			return Elite::BehaviorState::Success;
+		}
+		else
+		{
+			return Elite::BehaviorState::Failure;
+		}
 	}
 
 	Elite::BehaviorState ChangeToSeekTarget(Elite::Blackboard* pBlackboard)
@@ -346,6 +499,107 @@ namespace BT_Actions
 		}
 	}
 
+	//House
+
+	Elite::BehaviorState SetTargetHouseDoorAsTarget(Elite::Blackboard* pBlackboard)
+	{
+		House* pHouse{};
+		if (pBlackboard->GetData("TargetHouse", pHouse) == false || pHouse == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		IExamInterface* pInterface;
+
+		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+		pBlackboard->ChangeData("Target", pInterface->NavMesh_GetClosestPathPoint(pHouse->DoorLocation));
+
+		return Elite::BehaviorState::Success;
+	}
+
+	Elite::BehaviorState SetClosestNotVisitedSearchPointAsTarget(Elite::Blackboard* pBlackboard)
+	{
+		AgentInfo* pAgentInfo;
+		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		House* pHouse{};
+		if (pBlackboard->GetData("TargetHouse", pHouse) == false || pHouse == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		SearchPoint* pClosestSearchPoint{};
+		float closestDistSq{ INFINITY };
+
+		for (auto& pSearchPoint : pHouse->pSearchPoints)
+		{
+			if (pSearchPoint->IsVisited == true) continue;
+
+			float distSq = pSearchPoint->Position.DistanceSquared(pAgentInfo->Position);
+
+			if (distSq < closestDistSq)
+			{
+				closestDistSq = distSq;
+				pClosestSearchPoint = pSearchPoint;
+			}
+		}
+
+		pBlackboard->ChangeData("Target", pClosestSearchPoint->Position);
+
+		return Elite::BehaviorState::Success;
+	}
+
+	Elite::BehaviorState SetClosestNotVisitedHouseAsTarget(Elite::Blackboard* pBlackboard)
+	{
+		AgentInfo* pAgentInfo;
+		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		std::vector<House*>* pHouse;
+
+		if (pBlackboard->GetData("HouseVector", pHouse) == false || pHouse == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		House* pClosestSearchPoint{};
+		float closestDistSq{ INFINITY };
+
+		for (auto& pHouse : *pHouse)
+		{
+			if (pHouse->IsVisited == true) continue;
+
+			float distSq = pHouse->Center.DistanceSquared(pAgentInfo->Position);
+
+			if (distSq < closestDistSq)
+			{
+				closestDistSq = distSq;
+				pClosestSearchPoint = pHouse;
+			}
+		}
+
+		IExamInterface* pInterface;
+		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		const Elite::Vector2 target{ pInterface->NavMesh_GetClosestPathPoint(pClosestSearchPoint->Center) };
+
+		pBlackboard->ChangeData("Target", target);
+		pBlackboard->ChangeData("TargetHouse", pClosestSearchPoint);
+
+		return Elite::BehaviorState::Success;
+	}
+
 	Elite::BehaviorState MarkHouseAsVisited(Elite::Blackboard* pBlackboard)
 	{
 		House* pHouse{};
@@ -354,7 +608,7 @@ namespace BT_Actions
 			return Elite::BehaviorState::Failure;
 		}
 		
-		pHouse->isVisited = true;
+		pHouse->IsVisited = true;
 		return Elite::BehaviorState::Success;
 	}
 
@@ -374,7 +628,7 @@ namespace BT_Actions
 
 		auto finder = [&](SearchPoint* pSearchPoint)->bool
 		{
-			return pSearchPoint->position == target;
+			return pSearchPoint->Position == target;
 		};
 
 		auto iterator{ std::find_if(pHouse->pSearchPoints.begin(), pHouse->pSearchPoints.end(), finder) };
@@ -384,7 +638,7 @@ namespace BT_Actions
 			return Elite::BehaviorState::Failure;
 		}
 		
-		(*iterator)->isVisited = true;
+		(*iterator)->IsVisited = true;
 
 		return Elite::BehaviorState::Success;
 	}
@@ -396,11 +650,32 @@ namespace BT_Actions
 
 namespace BT_Conditions
 {
+	//Items
+	
+	bool IsItemNotGarbage(Elite::Blackboard* pBlackboard)
+	{
+		std::pair<EntityInfo, ItemInfo> item;
+
+		if (pBlackboard->GetData("TargetItem", item) == false)
+		{
+			return false;
+		}
+
+		if (item.second.Type == eItemType::GARBAGE)
+		{
+			return false;
+		}
+		else
+		{
+			return true;
+		}
+	}
+
 	bool IsItemInGrabRange(Elite::Blackboard* pBlackboard)
 	{
-		Elite::Vector2 target;
+		std::pair<EntityInfo, ItemInfo> item;
 
-		if (pBlackboard->GetData("Target", target) == false)
+		if (pBlackboard->GetData("TargetItem", item) == false)
 		{
 			return false;
 		}
@@ -412,7 +687,33 @@ namespace BT_Conditions
 			return false;
 		}
 
-		if (target.DistanceSquared(pAgentInfo->Position) <= pAgentInfo->GrabRange * pAgentInfo->GrabRange)
+		IExamInterface* pInterface{};
+
+		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
+		{
+			return false;
+		}
+
+		bool isInFov{ false };
+
+		EntityInfo ei = {};
+		for (int i = 0;; ++i)
+		{
+			if (pInterface->Fov_GetEntityByIndex(i, ei))
+			{
+				if (ei.EntityHash == item.first.EntityHash)
+				{
+					isInFov = true;
+					break;
+				}
+
+				continue;
+			}
+
+			break;
+		}
+
+		if (item.second.Location.DistanceSquared(pAgentInfo->Position) <= pAgentInfo->GrabRange * pAgentInfo->GrabRange && isInFov)
 		{
 			return true;
 		}
@@ -434,23 +735,69 @@ namespace BT_Conditions
 		return !pItemVector->empty();
 	}
 
+	//House
+
+	bool IsInsideAHouse(Elite::Blackboard* pBlackboard)
+	{
+		AgentInfo* pAgentInfo{};
+
+		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false || pAgentInfo == nullptr)
+		{
+			return false;
+		}	
+
+		return pAgentInfo->IsInHouse;
+	}
+
+	bool IsEnoughTimeInHouse(Elite::Blackboard* pBlackboard)
+	{
+		House* pHouse{};
+		if (pBlackboard->GetData("TargetHouse", pHouse) == false)
+		{
+			return false;
+		}
+
+		const float enoughTime{ 3.f };
+
+		return pHouse->TimeInside >= enoughTime;
+	}
+
 	bool IsAgentInsideThisHouse(Elite::Blackboard* pBlackboard)
 	{
 		Elite::Vector2 target;
-
 		if (pBlackboard->GetData("Target", target) == false)
 		{
 			return false;
 		}
 
 		House* pHouse{};
-
 		if (pBlackboard->GetData("TargetHouse", pHouse) == false)
 		{
 			return false;
 		}
 
-		return target == pHouse->Center;
+		AgentInfo* pAgentInfo{};
+		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false)
+		{
+			return false;
+		}
+
+		if (pAgentInfo->IsInHouse || pHouse->Center == target)
+		{
+			if (pHouse->DoorLocation == pHouse->Center)
+			{
+				Elite::Vector2 difference{ pAgentInfo->Position - pHouse->Center };
+
+				//Makes going outside smoother, when multiplier is larger 
+				pHouse->DoorLocation += difference * 10.f;
+			}
+
+			return true;
+		}
+		else
+		{
+			return false;
+		}
 	}
 
 	bool IsNotVisitedHouseInVector(Elite::Blackboard* pBlackboard)
@@ -464,7 +811,7 @@ namespace BT_Conditions
 
 		auto finder = [&](House* pHouseInVector)->bool
 		{
-			return pHouseInVector->isVisited == false;
+			return pHouseInVector->IsVisited == false;
 		};
 
 		//There are not yet visited houses
@@ -482,31 +829,34 @@ namespace BT_Conditions
 
 		auto finder = [&](SearchPoint* pSearchPointInHouse)->bool
 		{
-			return pSearchPointInHouse->isVisited == false;
+			return pSearchPointInHouse->IsVisited == false;
 		};
 
 		//There are not yet visited search points
 		return std::find_if(pHouse->pSearchPoints.begin(), pHouse->pSearchPoints.end(), finder) != pHouse->pSearchPoints.end();
 	}
 
-	bool IsItemUsefull(Elite::Blackboard* pBlackboard)
+	//Arriving
+
+	bool HasArrivedAtLocation(Elite::Blackboard* pBlackboard)
 	{
-		std::pair<EntityInfo,ItemInfo> item;
-
-		if (pBlackboard->GetData("TargetItem", item) == false)
+		Elite::Vector2 target{};
+		if (pBlackboard->GetData("Target", target) == false)
 		{
 			return false;
 		}
 
-		if (item.second.Type == eItemType::GARBAGE)
+		AgentInfo* pAgentInfo{};
+
+		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false || pAgentInfo == nullptr)
 		{
 			return false;
 		}
-		else
-		{
-			return true;
-		}
+
+		return target.DistanceSquared(pAgentInfo->Position) < 4.f;
 	}
+
+	//Rotation
 
 	bool IsAgentNotRotating(Elite::Blackboard* pBlackboard)
 	{
@@ -516,7 +866,7 @@ namespace BT_Conditions
 		{
 			return false;
 		}
-		
+
 		return !(*pIsRotating);
 	}
 
@@ -539,25 +889,7 @@ namespace BT_Conditions
 		const Elite::Vector2 currentVector{ Elite::OrientationToVector(pAgentInfo->Orientation) };
 
 		//Cross < 0.f -> left, Dot > 0.5f half of the positive side
-		return Elite::Cross(startVector,currentVector) < -0.2f && Elite::Dot(startVector, currentVector) > 0.5f;
-	}
-
-	bool HasArrivedAtLocation(Elite::Blackboard* pBlackboard)
-	{
-		Elite::Vector2 target{};
-		if (pBlackboard->GetData("Target", target) == false)
-		{
-			return false;
-		}
-
-		AgentInfo* pAgentInfo{};
-
-		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false || pAgentInfo == nullptr)
-		{
-			return false;
-		}
-
-		return target.DistanceSquared(pAgentInfo->Position) < 4.f;
+		return Elite::Cross(startVector, currentVector) < -0.2f && Elite::Dot(startVector, currentVector) > 0.5f;
 	}
 }
 

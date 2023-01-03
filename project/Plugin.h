@@ -10,8 +10,10 @@ class IExamInterface;
 class Seek;
 class Wander;
 class Face;
+class Flee;
 class RotateClockWise;
 class AddedSteering;
+class PrioritySteering;
 class ISteeringBehavior;
 
 class Plugin :public IExamPlugin
@@ -49,8 +51,10 @@ private:
 	Seek* m_pSeekBehaviour{};
 	Wander* m_pWanderBehaviour{};
 	Face* m_pFaceBehaviour{};
+	Flee* m_pFleeBehaviour{};
 	RotateClockWise* m_pRotateClockWiseBehaviour{};
 	AddedSteering* m_pSeekAndFaceBehaviour{};
+	PrioritySteering* m_pFaceAndSeekBehaviour{};
 
 	//AgentInfo
 	AgentInfo m_AgentInfo{};
@@ -60,12 +64,17 @@ private:
 	std::vector <std::pair<EntityInfo, ItemInfo>> m_Items{};
 	//Pair houseInfo + isVisited
 	std::vector<House*> m_pHouses{};
+	std::vector<GridElement*> m_pGrid{};
+	float m_CellSize{};
 
-	Elite::Vector2 m_DoorLocation{};
 	bool m_IsInsideHouse{};
 
 	bool m_IsRotating{false};
 	float m_StartOrientation{};
+
+	UINT m_NextFreeSlot{};
+
+
 };
 
 //ENTRY

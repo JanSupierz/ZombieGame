@@ -10,9 +10,9 @@ BlendedSteering::BlendedSteering(std::vector<WeightedBehavior> weightedBehaviors
 
 //****************
 //BLENDED STEERING
-SteeringPlugin_Output BlendedSteering::CalculateSteering(float deltaT, AgentInfo& agentInfo)
+SteeringPlugin_Output_Extension BlendedSteering::CalculateSteering(float deltaT, AgentInfo& agentInfo)
 {
-	SteeringPlugin_Output blendedSteering = {};
+	SteeringPlugin_Output_Extension blendedSteering = {};
 	auto totalWeight = 0.f;
 
 	for (auto weightedBehavior : m_WeightedBehaviors)
@@ -37,15 +37,14 @@ SteeringPlugin_Output BlendedSteering::CalculateSteering(float deltaT, AgentInfo
 
 //*****************
 //PRIORITY STEERING
-SteeringPlugin_Output PrioritySteering::CalculateSteering(float deltaT, AgentInfo& agentInfo)
+SteeringPlugin_Output_Extension PrioritySteering::CalculateSteering(float deltaT, AgentInfo& agentInfo)
 {
-	SteeringPlugin_Output steering = {};
+	SteeringPlugin_Output_Extension steering = {};
 
 	for (auto pBehavior : m_PriorityBehaviors)
 	{
 		steering = pBehavior->CalculateSteering(deltaT, agentInfo);
-		//if(pBehavior.IsValid)
-		break;
+		if(steering.IsValid) break;
 	}
 
 	//If non of the behavior return a valid output, last behavior is returned
@@ -54,13 +53,13 @@ SteeringPlugin_Output PrioritySteering::CalculateSteering(float deltaT, AgentInf
 
 //*****************
 //ADDED STEERING
-SteeringPlugin_Output AddedSteering::CalculateSteering(float deltaT, AgentInfo& agentInfo)
+SteeringPlugin_Output_Extension AddedSteering::CalculateSteering(float deltaT, AgentInfo& agentInfo)
 {
-	SteeringPlugin_Output steering = {};
+	SteeringPlugin_Output_Extension steering = {};
 
 	for (auto pBehavior : m_AddedBehaviors)
 	{
-		SteeringPlugin_Output partialSteering = pBehavior->CalculateSteering(deltaT, agentInfo);;
+		SteeringPlugin_Output_Extension partialSteering = pBehavior->CalculateSteering(deltaT, agentInfo);;
 
 		steering.LinearVelocity += partialSteering.LinearVelocity;
 		steering.AngularVelocity += partialSteering.AngularVelocity;

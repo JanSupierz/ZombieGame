@@ -11,9 +11,9 @@ using namespace Elite;
 //SEEK
 //****
 
-SteeringPlugin_Output Seek::CalculateSteering(float deltaT, AgentInfo& agentInfo)
+SteeringPlugin_Output_Extension Seek::CalculateSteering(float deltaT, AgentInfo& agentInfo)
 {
-	SteeringPlugin_Output steering = {};
+	SteeringPlugin_Output_Extension steering = {};
 
 	steering.LinearVelocity = m_Target.Position - agentInfo.Position;
 	steering.LinearVelocity.Normalize();
@@ -24,9 +24,9 @@ SteeringPlugin_Output Seek::CalculateSteering(float deltaT, AgentInfo& agentInfo
 
 //FLEE
 //****
-SteeringPlugin_Output Flee::CalculateSteering(float deltaT, AgentInfo& agentInfo)
+SteeringPlugin_Output_Extension Flee::CalculateSteering(float deltaT, AgentInfo& agentInfo)
 {
-	SteeringPlugin_Output steering = {};
+	SteeringPlugin_Output_Extension steering = {};
 
 	steering.LinearVelocity = agentInfo.Position - m_Target.Position;
 	steering.LinearVelocity.Normalize();
@@ -37,11 +37,11 @@ SteeringPlugin_Output Flee::CalculateSteering(float deltaT, AgentInfo& agentInfo
 
 //ARRIVE
 //****
-SteeringPlugin_Output Arrive::CalculateSteering(float deltaT, AgentInfo& agentInfo)
+SteeringPlugin_Output_Extension Arrive::CalculateSteering(float deltaT, AgentInfo& agentInfo)
 {
 	const float stopDistance{ 2.f };
 	const float slowRadius{ 15.f };
-	SteeringPlugin_Output steering = {};
+	SteeringPlugin_Output_Extension steering = {};
 
 	steering.LinearVelocity = m_Target.Position - agentInfo.Position;
 
@@ -67,18 +67,19 @@ SteeringPlugin_Output Arrive::CalculateSteering(float deltaT, AgentInfo& agentIn
 
 //FACE
 //****
-SteeringPlugin_Output Face::CalculateSteering(float deltaT, AgentInfo& agentInfo)
+SteeringPlugin_Output_Extension Face::CalculateSteering(float deltaT, AgentInfo& agentInfo)
 {
-	SteeringPlugin_Output steering = {};
+	SteeringPlugin_Output_Extension steering = {};
 
 	const Vector2 desiredDirection{ m_Target.Position - agentInfo.Position };
 	const Vector2 currentDirection{ OrientationToVector(agentInfo.Orientation) };
 
 	const float angle{ AngleBetween(currentDirection, desiredDirection) };
-	const float stopAngle{ 0.1f };
+	const float stopAngle{ 0.3f };
 
 	if (abs(angle) < stopAngle)
 	{
+		steering.IsValid = false;
 		steering.AngularVelocity = 0.f;
 	}
 	else
@@ -93,14 +94,14 @@ SteeringPlugin_Output Face::CalculateSteering(float deltaT, AgentInfo& agentInfo
 
 //WANDER
 //****
-SteeringPlugin_Output Wander::CalculateSteering(float deltaT, AgentInfo& agentInfo)
+SteeringPlugin_Output_Extension Wander::CalculateSteering(float deltaT, AgentInfo& agentInfo)
 {
 	m_WanderAngle += randomFloat(-m_MaxAngleChange, m_MaxAngleChange);
 
 	const Vector2 currentDirection{ Elite::OrientationToVector(agentInfo.Orientation) };
 	m_Target.Position = { agentInfo.Position + (currentDirection * m_OffsetDistance) + (Vector2{ cosf(m_WanderAngle),sinf(m_WanderAngle) } * m_Radius) };
 
-	SteeringPlugin_Output steering = {};
+	SteeringPlugin_Output_Extension steering = {};
 
 	steering.LinearVelocity = Seek::CalculateSteering(deltaT, agentInfo).LinearVelocity;
 	steering.AutoOrient = true;
@@ -110,9 +111,9 @@ SteeringPlugin_Output Wander::CalculateSteering(float deltaT, AgentInfo& agentIn
 
 //PURSUIT
 //****
-SteeringPlugin_Output Pursuit::CalculateSteering(float deltaT, AgentInfo& agentInfo)
+SteeringPlugin_Output_Extension Pursuit::CalculateSteering(float deltaT, AgentInfo& agentInfo)
 {
-	SteeringPlugin_Output steering = {};
+	SteeringPlugin_Output_Extension steering = {};
 
 	Vector2 direction{ m_Target.Position - agentInfo.Position };
 
@@ -134,9 +135,9 @@ SteeringPlugin_Output Pursuit::CalculateSteering(float deltaT, AgentInfo& agentI
 
 //EVADE
 //****
-SteeringPlugin_Output Evade::CalculateSteering(float deltaT, AgentInfo& agentInfo)
+SteeringPlugin_Output_Extension Evade::CalculateSteering(float deltaT, AgentInfo& agentInfo)
 {
-	SteeringPlugin_Output steering = {};
+	SteeringPlugin_Output_Extension steering = {};
 
 	Vector2 direction{ m_Target.Position - agentInfo.Position };
 
@@ -162,9 +163,9 @@ SteeringPlugin_Output Evade::CalculateSteering(float deltaT, AgentInfo& agentInf
 	return steering;
 }
 
-SteeringPlugin_Output RotateClockWise::CalculateSteering(float deltaT, AgentInfo& agentInfo)
+SteeringPlugin_Output_Extension RotateClockWise::CalculateSteering(float deltaT, AgentInfo& agentInfo)
 {
-	SteeringPlugin_Output steering{ Arrive::CalculateSteering(deltaT,agentInfo) };
+	SteeringPlugin_Output_Extension steering{ Arrive::CalculateSteering(deltaT,agentInfo) };
 
 	steering.AutoOrient = false;
 	steering.AngularVelocity = agentInfo.MaxAngularSpeed;

@@ -10,9 +10,9 @@ struct SteeringParams //Also used as Target for SteeringBehaviors
 	Elite::Vector2 LinearVelocity;
 	float AngularVelocity;
 
-	SteeringParams(Elite::Vector2 position = Elite::ZeroVector2, float orientation = 0.f, 
+	SteeringParams(Elite::Vector2 Position = Elite::ZeroVector2, float orientation = 0.f, 
 		Elite::Vector2 linearVel = Elite::ZeroVector2, float angularVel = 0.f) :
-		Position(position),
+		Position(Position),
 		Orientation(orientation),
 		LinearVelocity(linearVel),
 		AngularVelocity(angularVel) {}

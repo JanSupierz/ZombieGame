@@ -181,13 +181,25 @@ struct AgentInfo
 //Extension
 struct SearchPoint
 {
-	Elite::Vector2 position{};
-	bool isVisited{ false };
+	Elite::Vector2 Position{};
+	bool IsVisited{ false };
+};
+
+struct GridElement: public SearchPoint
+{
+	float Influence{};
 };
 
 struct House : public HouseInfo
 {
 	std::vector<SearchPoint*> pSearchPoints{};
-	bool isVisited{ false };
+	Elite::Vector2 DoorLocation{};
+	float TimeInside{};
+	bool IsVisited{ false };
+};
+
+struct SteeringPlugin_Output_Extension : SteeringPlugin_Output
+{
+	bool IsValid{ true };
 };
 #pragma endregion

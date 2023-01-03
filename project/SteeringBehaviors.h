@@ -21,7 +21,7 @@ public:
 	ISteeringBehavior() = default;
 	virtual ~ISteeringBehavior() = default;
 
-	virtual SteeringPlugin_Output CalculateSteering(float deltaT, AgentInfo& agentInfo) = 0;
+	virtual SteeringPlugin_Output_Extension CalculateSteering(float deltaT, AgentInfo& agentInfo) = 0;
 
 	//Seek Functions
 	void SetTarget(const TargetData& target) { m_Target = target; }
@@ -45,7 +45,7 @@ public:
 	virtual ~Seek() = default;
 
 	//Seek Behaviour
-	SteeringPlugin_Output CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
+	SteeringPlugin_Output_Extension CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
 };
 
 ///////////////////////////////////////
@@ -58,7 +58,7 @@ public:
 	virtual ~Flee() = default;
 
 	//Flee Behaviour
-	SteeringPlugin_Output CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
+	SteeringPlugin_Output_Extension CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
 };
 
 ///////////////////////////////////////
@@ -71,7 +71,7 @@ public:
 	virtual ~Arrive() = default;
 
 	//Arrive Behaviour
-	SteeringPlugin_Output CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
+	SteeringPlugin_Output_Extension CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
 };
 
 ///////////////////////////////////////
@@ -84,7 +84,7 @@ public:
 	virtual ~Face() = default;
 
 	//Face Behaviour
-	SteeringPlugin_Output CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
+	SteeringPlugin_Output_Extension CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
 };
 
 ///////////////////////////////////////
@@ -97,7 +97,7 @@ public:
 	virtual ~Wander() = default;
 
 	//Wander Behaviour
-	SteeringPlugin_Output CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
+	SteeringPlugin_Output_Extension CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
 
 	void SetWanderOffset(float offset) { m_OffsetDistance = offset; }
 	void SetWanderRadius(float radius) { m_Radius = radius; }
@@ -120,7 +120,7 @@ public:
 	virtual ~Pursuit() = default;
 
 	//Pursuit Behaviour
-	SteeringPlugin_Output CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
+	SteeringPlugin_Output_Extension CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
 };
 
 //EVADE
@@ -132,7 +132,7 @@ public:
 	virtual ~Evade() = default;
 
 	//Evade Behaviour
-	SteeringPlugin_Output CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
+	SteeringPlugin_Output_Extension CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
 	void SetEvadeRadius(float evadeRadius) { m_EvadeRadius = evadeRadius; }
 
 private:
@@ -149,7 +149,7 @@ public:
 	virtual ~RotateClockWise() = default;
 
 	//Rotate Clock Wise Behaviour
-	SteeringPlugin_Output CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
+	SteeringPlugin_Output_Extension CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
 };
 
 #endif
