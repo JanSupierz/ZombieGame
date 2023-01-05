@@ -33,7 +33,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 
 	const Elite::Vector2 startPos{ world.Center - world.Dimensions / 2.f };
 
-	constexpr int nrCells{ 15 };
+	constexpr int nrCells{ 9 };
 	m_CellSize = world.Dimensions.x / nrCells;
 
 	for (int x{}; x < nrCells; ++x)
@@ -48,8 +48,24 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 			pGridElement->Position.y += y * m_CellSize;
 
 			m_pGrid.push_back(pGridElement);
+			m_pCurrentGridElement = pGridElement;
 		}
 	}
+
+	const float offset{ 10.f };
+	for (size_t index{}; index < m_pGrid.size(); ++index)
+	{
+		for (size_t idx{}; idx < m_pGrid.size(); ++idx)
+		{
+			if (index == idx) continue;
+
+			if (m_pGrid[index]->Position.Distance(m_pGrid[idx]->Position) < m_CellSize + offset)
+			{
+				m_pGrid[index]->pNeighbors.push_back(m_pGrid[idx]);
+			}
+		}
+	}
+
 
 	//Inventory
 	m_NextFreeSlot = 0;
@@ -60,6 +76,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pWanderBehaviour = new Wander();
 	m_pFaceBehaviour = new Face();
 	m_pRotateClockWiseBehaviour = new RotateClockWise();
+	m_pFleeAndFaceBehaviour = new AddedSteering(std::vector<ISteeringBehavior*>{ m_pFleeBehaviour, m_pFaceBehaviour});
 	m_pSeekAndFaceBehaviour = new AddedSteering(std::vector<ISteeringBehavior*>{ m_pSeekBehaviour, m_pFaceBehaviour});
 	m_pFaceAndSeekBehaviour = new PrioritySteering(std::vector<ISteeringBehavior*>{ m_pFaceBehaviour, m_pSeekBehaviour});
 	m_pBlackboard = CreateBlackboard();
@@ -68,32 +85,31 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 	m_pBehaviourTree = new Elite::BehaviorTree(m_pBlackboard,
 		new Elite::BehaviorSelector(
 		{
-			//Items
-			new Elite::BehaviorSequence(
+			//Enemies
+			new Elite::BehaviorSelector(
 			{
-				new Elite::BehaviorConditional(BT_Conditions::IsItemInVector),
-				new Elite::BehaviorAction(BT_Actions::SetClosestItemAsTarget),
-				new Elite::BehaviorSelector(
+				new Elite::BehaviorSequence(
 				{
-					//Item in grab range
-					new Elite::BehaviorSequence(
+					new Elite::BehaviorConditional(BT_Conditions::IsEnemyInVector),
+					new Elite::BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
+					new Elite::BehaviorSelector(
 					{
-						new Elite::BehaviorConditional(BT_Conditions::IsItemInGrabRange),
-						new Elite::BehaviorSelector(
-						{
-							//Grab usefull item
+							//Aiming finished
 							new Elite::BehaviorSequence(
 							{
-								new Elite::BehaviorConditional(BT_Conditions::IsItemNotGarbage),
-								new Elite::BehaviorAction(BT_Actions::HandleItemGrabbing)
+								new Elite::BehaviorConditional(BT_Conditions::IsAimingFinished),
+								new Elite::BehaviorAction(BT_Actions::HandleShooting)
 							}),
-							//Destroy not usefull item
-							new Elite::BehaviorAction(BT_Actions::DestroyItem)
-						})
+						//Run away and aim
+						new Elite::BehaviorAction(BT_Actions::ChangeToFleeAndFaceTarget)
 					}),
-					//Run to nearest item
-					new Elite::BehaviorAction(BT_Actions::ChangeToFaceAndSeekTarget)
 				}),
+				new Elite::BehaviorSequence(
+				{
+					new Elite::BehaviorConditional(BT_Conditions::WasBitten),
+					new Elite::BehaviorAction(BT_Actions::SetPositionBehindAsTarget),
+					new Elite::BehaviorAction(BT_Actions::ChangeToFleeAndFaceTarget)
+				})
 			}),
 			//Houses
 			new Elite::BehaviorSequence(
@@ -108,6 +124,33 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 						new Elite::BehaviorConditional(BT_Conditions::IsAgentInsideThisHouse),
 						new Elite::BehaviorSelector(
 						{
+							//Items
+							new Elite::BehaviorSequence(
+							{
+								new Elite::BehaviorConditional(BT_Conditions::IsNotVisitedItemInVector),
+								new Elite::BehaviorAction(BT_Actions::SetClosestItemAsTarget),
+								new Elite::BehaviorSelector(
+								{
+										//Item in grab range
+										new Elite::BehaviorSequence(
+										{
+											new Elite::BehaviorConditional(BT_Conditions::IsItemInGrabRange),
+											new Elite::BehaviorSelector(
+											{
+												//Grab usefull item
+												new Elite::BehaviorSequence(
+												{
+													new Elite::BehaviorConditional(BT_Conditions::IsItemNotGarbage),
+													new Elite::BehaviorAction(BT_Actions::HandleItemGrabbing)
+												}),
+												//Destroy not usefull item
+												new Elite::BehaviorAction(BT_Actions::DestroyItem)
+											})
+										}),
+									//Run to nearest item
+									new Elite::BehaviorAction(BT_Actions::ChangeToFaceAndSeekTarget)
+								}),
+							}),
 							//Building needs exploration
 							new Elite::BehaviorSequence(
 							{
@@ -240,7 +283,30 @@ void Plugin::Update(float dt)
 //This function calculates the new SteeringPlugin_Output, called once per frame
 SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 {
-	 m_AgentInfo = m_pInterface->Agent_GetInfo();
+	m_AgentInfo = m_pInterface->Agent_GetInfo();
+
+	const float halfSide{ m_CellSize / 2.f };
+	const float quarterSize{ m_CellSize / 4.f };
+
+	for (GridElement* pGridElement : m_pGrid)
+	{
+		const float distanceX{ std::abs(m_AgentInfo.Position.x - pGridElement->Position.x) };
+		const float distanceY{ std::abs(m_AgentInfo.Position.y - pGridElement->Position.y) };
+
+		if (distanceX <= quarterSize && distanceY <= quarterSize)
+		{
+			pGridElement->IsVisited = true;
+
+			if (distanceX <= halfSide && distanceY <= halfSide)
+			{
+				m_pCurrentGridElement = pGridElement;
+				break;
+			}
+		}
+	}
+
+	bool shouldRecalculateInfluence{ false };
+
 
 	auto vHousesInFOV = GetHousesInFOV();//uses m_pInterface->Fov_GetHouseByIndex(...)
 	auto vEntitiesInFOV = GetEntitiesInFOV(); //uses m_pInterface->Fov_GetEntityByIndex(...)
@@ -251,6 +317,8 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 
 		if (std::find_if(m_pHouses.begin(), m_pHouses.end(), compareHouse) == m_pHouses.end()) 
 		{
+			shouldRecalculateInfluence = true;
+
 			std::cout << "New house\n";
 			House* pHouse{ new House };
 			pHouse->Center = e.Center;
@@ -289,6 +357,8 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 		}
 	}
 
+	m_Enemies.clear();
+
 	for (auto& e : vEntitiesInFOV)
 	{
 		if (e.Type == eEntityType::ITEM)
@@ -296,42 +366,57 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 			ItemInfo itemInfo;
 			m_pInterface->Item_GetInfo(e, itemInfo);
 
-			auto compareItem = [&](std::pair<EntityInfo,ItemInfo> x) -> bool { return x.second.ItemHash == itemInfo.ItemHash; };
+			auto compareItem = [&](Item* pItemInVec) -> bool { return pItemInVec->itemInfo.ItemHash == itemInfo.ItemHash; };
 
-			if (std::find_if(m_Items.begin(), m_Items.end(), compareItem) == m_Items.end())
+			if (std::find_if(m_pItems.begin(), m_pItems.end(), compareItem) == m_pItems.end())
 			{
 				std::cout << "New item\n";
-				m_Items.push_back(std::make_pair(e, itemInfo));
+
+				Item* pItem{ new Item };
+				pItem->entityInfo = e;
+				pItem->itemInfo = itemInfo;
+
+				m_pItems.push_back(pItem);
 			}
+		}
+		if (e.Type == eEntityType::ENEMY)
+		{
+			EnemyInfo enemyInfo;
+			m_pInterface->Enemy_GetInfo(e, enemyInfo);
+
+			m_Enemies.push_back(enemyInfo);
 		}
 	}
 
 	m_pBehaviourTree->Update(dt);
 
+	//Mark cell as visited
 	for (GridElement* pGridElement : m_pGrid)
 	{
-		pGridElement->Influence = 0.f;
-
 		if (pGridElement->IsVisited) continue;
 
 		float squaredDistanceToAgent{ pGridElement->Position.DistanceSquared(m_AgentInfo.Position) };
 
-		if (squaredDistanceToAgent < m_AgentInfo.FOV_Range * m_AgentInfo.FOV_Range)
+		if (squaredDistanceToAgent < 10.f)
 		{
 			pGridElement->IsVisited = true;
-
 			continue;
 		}
-		
-		//Only next 4 elements may have influence
-		pGridElement->Influence = m_CellSize / squaredDistanceToAgent;
+	}
 
-		for (House* pHouse : m_pHouses)
+	if (shouldRecalculateInfluence)
+	{
+		//Recalculate influence
+		for (GridElement* pGridElement : m_pGrid)
 		{
-			const float nrCellsAway{ (pGridElement->Position.Distance(pHouse->Center)) / m_CellSize };
-			pGridElement->Influence += 1.f / nrCellsAway;
-		}
+			pGridElement->Influence = 0.f;
 
+			for (House* pHouse : m_pHouses)
+			{
+				const float nrCellsAway{ (pGridElement->Position.Distance(pHouse->Center)) / m_CellSize };
+				pGridElement->Influence += 1.f / nrCellsAway;
+			}
+		}
 	}
 
 	for (auto& e : vHousesInFOV)
@@ -349,78 +434,6 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 			}
 		}
 	}
-
-	//
-	//for (auto& e : vEntitiesInFOV)
-	//{
-	//	if (e.Type == eEntityType::PURGEZONE)
-	//	{
-	//		PurgeZoneInfo zoneInfo{};
-	//		m_pInterface->PurgeZone_GetInfo(e, zoneInfo);
-	//		//std::cout << "Purge Zone in FOV:" << e.Location.x << ", "<< e.Location.y << "---Radius: "<< zoneInfo.Radius << std::endl;
-	//	}
-	//
-	//	if (e.Type == eEntityType::ITEM)
-	//	{
-	//		ItemInfo itemInfo{};
-	//		m_pInterface->Item_GetInfo(e, itemInfo);
-	//
-	//		m_pSeekBehaviour->SetTarget(e.Location);
-	//		m_pFaceBehaviour->SetTarget(e.Location);
-	//		m_pCurrentSteering = m_pSeekAndFaceBehaviour;
-	//
-	//		if (agentInfo.Position.DistanceSquared(e.Location) <= agentInfo.GrabRange * agentInfo.GrabRange)
-	//		{
-	//			if (itemInfo.Type == eItemType::GARBAGE)
-	//			{
-	//				m_pInterface->Item_Destroy(e);
-	//			}
-	//			else
-	//			{
-	//				m_pInterface->Item_Grab(e, itemInfo);
-	//
-	//				if (m_InventorySlot < 5)
-	//				{
-	//					m_pInterface->Inventory_AddItem(m_InventorySlot++, itemInfo);
-	//				}
-	//			}
-	//		}
-	//	}
-	//
-	//	if (e.Type == eEntityType::ENEMY)
-	//	{
-	//		EnemyInfo enemyInfo{};
-	//		m_pInterface->Enemy_GetInfo(e, enemyInfo);
-	//
-	//		m_pFaceBehaviour->SetTarget(e.Location);
-	//		m_pCurrentSteering = m_pFaceBehaviour;
-	//
-	//		if (m_pFaceBehaviour->CalculateSteering(dt, agentInfo).AngularVelocity == 0.f)
-	//		{
-	//			ItemInfo itemInfo{};
-	//
-	//			m_pInterface->Inventory_GetItem(1, itemInfo);
-	//			m_pInterface->Inventory_UseItem(1);
-	//		}
-	//	}
-	//}
-	//
-	//
-	//if (vEntitiesInFOV.size() == 0 && !m_IsEnemyNearBy && vHousesInFOV.size() == 0)
-	//{
-	//	m_pCurrentSteering = m_pWanderBehaviour;
-	//}
-	//
-	////Was bitten from behind
-	//if (vEntitiesInFOV.size() == 0 && agentInfo.WasBitten)
-	//{
-	//	m_pSeekBehaviour->SetTarget(agentInfo.Position + Elite::OrientationToVector(agentInfo.Orientation) * 100.f);
-	//	m_pFaceBehaviour->SetTarget(agentInfo.Position - Elite::OrientationToVector(agentInfo.Orientation) * 100.f);
-	//
-	//	m_pCurrentSteering = m_pSeekAndFaceBehaviour;
-	//
-	//	m_IsEnemyNearBy = true;
-	//}
 	
 	SteeringPlugin_Output steering{};
 	ISteeringBehavior* pCurrentSteering{};
@@ -456,13 +469,19 @@ void Plugin::Render(float dt) const
 		m_pInterface->Draw_Direction(pHouse->Center, pHouse->DoorLocation - pHouse->Center, 10.f, Elite::Vector3{ 0.f,1.f,0.f });
 	}
 
+	const float halfCell{ m_CellSize / 2.f };
+	Elite::Vector3 color{};
+
 	for (GridElement* pGridElement : m_pGrid)
 	{
-		const float halfCell{ m_CellSize / 2.f };
-		Elite::Vector3 color{ pGridElement->Influence,0.f,0.f };
+		if (pGridElement->IsVisited) continue;
+
+		color.x = pGridElement->Influence;
 
 		m_pInterface->Draw_Segment(pGridElement->Position + Elite::Vector2{ -halfCell, -halfCell }, pGridElement->Position + Elite::Vector2{ -halfCell,halfCell }, color);
 		m_pInterface->Draw_Segment(pGridElement->Position + Elite::Vector2{ -halfCell, halfCell }, pGridElement->Position + Elite::Vector2{ halfCell,halfCell }, color);
+		m_pInterface->Draw_Segment(pGridElement->Position + Elite::Vector2{ halfCell, halfCell }, pGridElement->Position + Elite::Vector2{ halfCell,-halfCell }, color);
+		m_pInterface->Draw_Segment(pGridElement->Position + Elite::Vector2{ -halfCell, -halfCell }, pGridElement->Position + Elite::Vector2{ halfCell,-halfCell }, color);
 	}
 }
 
@@ -513,7 +532,8 @@ Elite::Blackboard* Plugin::CreateBlackboard()
 	pBlackboard->AddData("Interface", m_pInterface);
 
 	//Vectors
-	pBlackboard->AddData("ItemVector", &m_Items);
+	pBlackboard->AddData("ItemVector", &m_pItems);
+	pBlackboard->AddData("EnemyVector", &m_Enemies);
 	pBlackboard->AddData("HouseVector", &m_pHouses);
 	pBlackboard->AddData("GridVector", &m_pGrid);
 	pBlackboard->AddData("CellSize", m_CellSize);
@@ -527,6 +547,7 @@ Elite::Blackboard* Plugin::CreateBlackboard()
 	pBlackboard->AddData("Flee", m_pFleeBehaviour);
 	pBlackboard->AddData("SeekAndFace", m_pSeekAndFaceBehaviour);
 	pBlackboard->AddData("FaceAndSeek", m_pFaceAndSeekBehaviour);
+	pBlackboard->AddData("FleeAndFace", m_pFleeAndFaceBehaviour);
 
 	//Agent
 	pBlackboard->AddData("AgentInfo", &m_AgentInfo);
@@ -534,13 +555,12 @@ Elite::Blackboard* Plugin::CreateBlackboard()
 	pBlackboard->AddData("StartOrientation", &m_StartOrientation);
 	pBlackboard->AddData("NextFreeSlot", &m_NextFreeSlot);
 
+	pBlackboard->AddData("CurrentCell", &m_pCurrentGridElement);
+
 	//Targets
 	Elite::Vector2 target{};
 	pBlackboard->AddData("Target", target);
-
-	std::pair<EntityInfo,ItemInfo> item{};
-	pBlackboard->AddData("TargetItem", item);
-
+	pBlackboard->AddData("TargetItem", static_cast<Item*>(nullptr));
 	pBlackboard->AddData("TargetHouse", static_cast<House*>(nullptr));
 
 	return pBlackboard;

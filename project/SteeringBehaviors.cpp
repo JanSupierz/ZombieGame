@@ -75,12 +75,20 @@ SteeringPlugin_Output_Extension Face::CalculateSteering(float deltaT, AgentInfo&
 	const Vector2 currentDirection{ OrientationToVector(agentInfo.Orientation) };
 
 	const float angle{ AngleBetween(currentDirection, desiredDirection) };
-	const float stopAngle{ 0.3f };
+	const float slowAngle{ 0.2f };
+	const float stopAngle{ 0.1f };
 
-	if (abs(angle) < stopAngle)
+	if (abs(angle) < slowAngle)
 	{
-		steering.IsValid = false;
-		steering.AngularVelocity = 0.f;
+		if (abs(angle) <= stopAngle)
+		{
+			steering.IsValid = false;
+			steering.AngularVelocity = 0.f;
+		}
+		else
+		{
+			steering.AngularVelocity = (angle < 0 ? -1 : 1) * agentInfo.MaxAngularSpeed * abs(angle)/slowAngle;
+		}
 	}
 	else
 	{

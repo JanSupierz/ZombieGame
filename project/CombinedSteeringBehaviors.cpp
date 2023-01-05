@@ -63,7 +63,9 @@ SteeringPlugin_Output_Extension AddedSteering::CalculateSteering(float deltaT, A
 
 		steering.LinearVelocity += partialSteering.LinearVelocity;
 		steering.AngularVelocity += partialSteering.AngularVelocity;
-
+		steering.IsValid = steering.IsValid && partialSteering.IsValid;
+		steering.AutoOrient = steering.AutoOrient && partialSteering.AutoOrient;
+		steering.RunMode = steering.RunMode && partialSteering.RunMode;
 	}
 
 	return steering;

@@ -188,6 +188,7 @@ struct SearchPoint
 struct GridElement: public SearchPoint
 {
 	float Influence{};
+	std::vector<GridElement*> pNeighbors{};
 };
 
 struct House : public HouseInfo
@@ -198,8 +199,20 @@ struct House : public HouseInfo
 	bool IsVisited{ false };
 };
 
+struct Item
+{
+	ItemInfo itemInfo;
+	EntityInfo entityInfo;
+	bool IsVisited{ false };
+};
+
 struct SteeringPlugin_Output_Extension : SteeringPlugin_Output
 {
 	bool IsValid{ true };
+};
+
+struct Enemy: public EnemyInfo
+{
+	Elite::Vector2 PositionWhenSeen{};
 };
 #pragma endregion

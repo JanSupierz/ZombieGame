@@ -54,17 +54,21 @@ private:
 	Flee* m_pFleeBehaviour{};
 	RotateClockWise* m_pRotateClockWiseBehaviour{};
 	AddedSteering* m_pSeekAndFaceBehaviour{};
+	AddedSteering* m_pFleeAndFaceBehaviour{};
 	PrioritySteering* m_pFaceAndSeekBehaviour{};
 
 	//AgentInfo
 	AgentInfo m_AgentInfo{};
 	bool m_IsEnemyNearBy = false;
 
+	float m_TimeSinceBitten{};
+
 	//Pair entityInfo + itemInfo
-	std::vector <std::pair<EntityInfo, ItemInfo>> m_Items{};
+	std::vector <Item*> m_pItems{};
 	//Pair houseInfo + isVisited
 	std::vector<House*> m_pHouses{};
 	std::vector<GridElement*> m_pGrid{};
+	std::vector<EnemyInfo> m_Enemies{};
 	float m_CellSize{};
 
 	bool m_IsInsideHouse{};
@@ -74,7 +78,7 @@ private:
 
 	UINT m_NextFreeSlot{};
 
-
+	GridElement* m_pCurrentGridElement{};
 };
 
 //ENTRY
