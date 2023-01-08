@@ -28,6 +28,9 @@
     </ClInclude>
     <ClInclude Include="EDecisionMaking.h" />
     <ClInclude Include="EliteBehaviorTree\EBehaviorTree.h" />
+    <ClInclude Include="Extensions.h">
+      <Filter>Added</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Added">

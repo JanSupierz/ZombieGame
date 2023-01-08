@@ -186,6 +186,7 @@
     <ClInclude Include="CombinedSteeringBehaviors.h" />
     <ClInclude Include="EDecisionMaking.h" />
     <ClInclude Include="EliteBehaviorTree\EBehaviorTree.h" />
+    <ClInclude Include="Extensions.h" />
     <ClInclude Include="Plugin.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="SteeringBehaviors.h" />

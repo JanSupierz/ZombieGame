@@ -13,9 +13,9 @@ struct SteeringPlugin_Output
 struct PluginInfo
 {
 	std::string BotName = "Minion";
-	std::string Student_FirstName = "Jan";
-	std::string Student_LastName = "Supierz";
-	std::string Student_Class = "2DAE15N";
+	std::string Student_FirstName = "Not Set";
+	std::string Student_LastName = "Not Set";
+	std::string Student_Class = "Not Set";
 };	
 
 struct GameDebugParams //Debuggin Purposes only (Ignored during release build)
@@ -37,12 +37,13 @@ struct GameDebugParams //Debuggin Purposes only (Ignored during release build)
 	bool RenderUI = false; //Render Player UI (Parameters)
 	bool AutoGrabClosestItem = false; //Auto Grab closest item (Item_Grab)
 	std::string LevelFile = "GameLevel.gppl"; //Level to load?
-	int Seed = 1234; //Seed for random generator
+	int Seed = -1; //Seed for random generator
 	int StartingDifficultyStage = 0; // Overwrites the difficulty stage
 	bool InfiniteStamina = false; // Agent has infinite stamina
 	bool SpawnDebugPistol = false; // Spawns pistol with 1000 ammo at start
-	bool SpawnDebugShotgun = false; // Spawns pistol with 1000 ammo at start
-	bool SpawnPurgeZonesOnMiddleClick = false; // Middle mouse clicks spawn purge zones
+	bool SpawnDebugShotgun = false; // Spawns shotgun with 1000 ammo at start
+	bool SpawnPurgeZonesOnMiddleClick = false; // Middle mouse clicks spawns purge zone
+	bool SpawnZombieOnRightClick = false; // Right mouse clicks spawns zombie
 	bool PrintDebugMessages = true;
 	bool ShowDebugItemNames = true;
 };
@@ -176,43 +177,5 @@ struct AgentInfo
 	float MaxAngularSpeed;
 	float GrabRange;
 	float AgentSize;
-};
-
-//Extension
-struct SearchPoint
-{
-	Elite::Vector2 Position{};
-	bool IsVisited{ false };
-};
-
-struct GridElement: public SearchPoint
-{
-	float Influence{};
-	std::vector<GridElement*> pNeighbors{};
-};
-
-struct House : public HouseInfo
-{
-	std::vector<SearchPoint*> pSearchPoints{};
-	Elite::Vector2 DoorLocation{};
-	float TimeInside{};
-	bool IsVisited{ false };
-};
-
-struct Item
-{
-	ItemInfo itemInfo;
-	EntityInfo entityInfo;
-	bool IsVisited{ false };
-};
-
-struct SteeringPlugin_Output_Extension : SteeringPlugin_Output
-{
-	bool IsValid{ true };
-};
-
-struct Enemy: public EnemyInfo
-{
-	Elite::Vector2 PositionWhenSeen{};
 };
 #pragma endregion

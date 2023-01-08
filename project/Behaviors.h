@@ -53,7 +53,7 @@ namespace BT_Actions
 			{
 				if (pGridElement->IsVisited) continue;
 
-				if (bestInfluence < pGridElement->Influence)
+				if (bestInfluence <= pGridElement->Influence)
 				{
 					bestInfluence = pGridElement->Influence;
 					target = pGridElement->Position;
@@ -70,13 +70,27 @@ namespace BT_Actions
 		return Elite::BehaviorState::Success;
 	}
 
+	//Movement
+	Elite::BehaviorState SetRunning(Elite::Blackboard* pBlackboard)
+	{
+		bool* pShouldRun{};
+
+		if (pBlackboard->GetData("ShouldRun", pShouldRun) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		*pShouldRun = true;
+
+		return Elite::BehaviorState::Success;
+	}
 	//Rotation
 
 	Elite::BehaviorState InitializeRotating(Elite::Blackboard* pBlackboard)
 	{
 		bool* pIsRotating{};
 
-		if (pBlackboard->GetData("IsRotating", pIsRotating) == false || pIsRotating == nullptr)
+		if (pBlackboard->GetData("IsRotating", pIsRotating) == false)
 		{
 			return Elite::BehaviorState::Failure;
 		}
@@ -117,33 +131,75 @@ namespace BT_Actions
 	{
 		bool* pIsRotating{};
 
-		if (pBlackboard->GetData("IsRotating", pIsRotating) == false || pIsRotating == nullptr)
+		if (pBlackboard->GetData("IsRotating", pIsRotating) == false)
 		{
 			return Elite::BehaviorState::Failure;
 		}
 
 		*pIsRotating = false;
+
 		return Elite::BehaviorState::Success;
 	}
 
 	//Enemy
-
-	Elite::BehaviorState SetPositionBehindAsTarget(Elite::Blackboard* pBlackboard)
+	Elite::BehaviorState HandleAttackFromBehind(Elite::Blackboard* pBlackboard)
 	{
-		AgentInfo* pAgentInfo;
-
-		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false)
+		float* pDeltaTime{};
+		if (pBlackboard->GetData("DeltaTime", pDeltaTime) == false || pDeltaTime == nullptr)
 		{
 			return Elite::BehaviorState::Failure;
 		}
 
-		pBlackboard->ChangeData("Target", pAgentInfo->Position - Elite::OrientationToVector(pAgentInfo->Orientation) * 100.f);
+		float* pAlertedTime{};
+		if (pBlackboard->GetData("AlertedTime", pAlertedTime) == false || pAlertedTime == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
 
-		return Elite::BehaviorState::Success;
+		AgentInfo* pAgentInfo{};
+		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false || pAgentInfo == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		if (pAgentInfo->Bitten)
+		{
+			*pAlertedTime += *pDeltaTime;
+			std::cout << "Attack from behind\n";
+
+			AgentInfo* pAgentInfo;
+
+			if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false)
+			{
+				return Elite::BehaviorState::Failure;
+			}
+
+			pBlackboard->ChangeData("Target", pAgentInfo->Position - Elite::OrientationToVector(pAgentInfo->Orientation) * 100.f);
+
+			return Elite::BehaviorState::Success;
+		}
+		else if (*pAlertedTime > 0.f && *pAlertedTime < 4.f)
+		{
+			*pAlertedTime += *pDeltaTime;
+			return Elite::BehaviorState::Success;
+		}
+		else
+		{
+			*pAlertedTime = 0.f;
+			return Elite::BehaviorState::Failure;
+		}
 	}
 
 	Elite::BehaviorState SetClosestEnemyAsTarget(Elite::Blackboard* pBlackboard)
 	{
+		float* pAlertedTime{};
+		if (pBlackboard->GetData("AlertedTime", pAlertedTime) == false || pAlertedTime == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		*pAlertedTime = 0.f;
+
 		std::vector<EnemyInfo>* pEnemyVector;
 
 		if (pBlackboard->GetData("EnemyVector", pEnemyVector) == false || pEnemyVector == nullptr)
@@ -181,7 +237,6 @@ namespace BT_Actions
 		}
 
 		pBlackboard->ChangeData("Target", closestEnemy.Location);
-		//pBlackboard->ChangeData("TargetEnemy", closestEnemy);
 
 		return Elite::BehaviorState::Success;
 	}
@@ -195,19 +250,84 @@ namespace BT_Actions
 			return Elite::BehaviorState::Failure;
 		}
 
-		ItemInfo inventoryItem{};
-		for (UINT index{}; index < 5; ++index)
+		std::vector<std::pair<int,InventoryItemType>>* pInventory;
+
+		if (pBlackboard->GetData("Inventory", pInventory) == false || pInventory == nullptr)
 		{
-			pInterface->Inventory_GetItem(index, inventoryItem);
-		
-			if (inventoryItem.Type == eItemType::PISTOL || inventoryItem.Type == eItemType::SHOTGUN)
+			return Elite::BehaviorState::Failure;
+		}
+
+		Elite::Vector2 target;
+		if (pBlackboard->GetData("Target", target) == false )
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		AgentInfo* pAgent{};
+		if (pBlackboard->GetData("AgentInfo", pAgent) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		UINT slotIndex{ pInventory->size() };
+		int leastAmmo{ 1000 };
+		int currentAmmo{};
+
+		const float distanceToTarget{ pAgent->Position.DistanceSquared(target) };
+
+		ItemInfo inventoryItem{};
+		for (const auto& inventoryPair : *pInventory)
+		{
+			if (inventoryPair.second == InventoryItemType::Pistol)
 			{
-				pInterface->Inventory_UseItem(index);
-				return Elite::BehaviorState::Success;
+				currentAmmo = pInterface->Inventory_GetItem(inventoryPair.first, inventoryItem);
+
+				if (currentAmmo < leastAmmo)
+				{
+					slotIndex = inventoryPair.first;
+					leastAmmo = currentAmmo;
+				}
+			}
+			else if (inventoryPair.second == InventoryItemType::Shotgun)
+			{
+				currentAmmo = 1000;
+
+				if (currentAmmo < leastAmmo)
+				{
+					slotIndex = inventoryPair.first;
+					leastAmmo = currentAmmo;
+				}
+
+				const float squaredFOVRange{ pAgent->FOV_Range * pAgent->FOV_Range };
+				if (distanceToTarget < 0.7f * squaredFOVRange && distanceToTarget > 0.2f)
+				{
+					slotIndex = inventoryPair.first;
+					break;
+				}
 			}
 		}
 
-		return Elite::BehaviorState::Failure;
+		if (slotIndex == pInventory->size())
+		{
+			return Elite::BehaviorState::Failure;
+		}
+		else
+		{
+			if (!pInterface->Inventory_UseItem(slotIndex))
+			{
+				//Can't shoot -> empty shotgun
+				(*pInventory)[slotIndex].second = InventoryItemType::Empty;
+				pInterface->Inventory_RemoveItem(slotIndex);
+			}
+			else if (pInterface->Weapon_GetAmmo(inventoryItem) == 0)
+			{
+				//No ammo -> empty pistol
+				(*pInventory)[slotIndex].second = InventoryItemType::Empty;
+				pInterface->Inventory_RemoveItem(slotIndex);
+			}
+
+			return Elite::BehaviorState::Success;
+		}
 	}
 	//Items
 
@@ -239,6 +359,8 @@ namespace BT_Actions
 
 		for (Item* pItem : *pItemVector)
 		{
+			if (pItem->IsVisited) continue;
+
 			float distSq = pItem->itemInfo.Location.DistanceSquared(pAgentInfo->Position);
 
 			if (distSq < closestDistSq)
@@ -303,7 +425,6 @@ namespace BT_Actions
 
 	Elite::BehaviorState HandleItemGrabbing(Elite::Blackboard* pBlackboard)
 	{
-
 		IExamInterface* pInterface;
 
 		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
@@ -311,13 +432,13 @@ namespace BT_Actions
 			return Elite::BehaviorState::Failure;
 		}
 
-		UINT* pNextFreeSlot{};
-		if (pBlackboard->GetData("NextFreeSlot", pNextFreeSlot) == false || pNextFreeSlot == nullptr)
+		std::vector<std::pair<int, InventoryItemType>>* pInventory{};
+
+		if (pBlackboard->GetData("Inventory", pInventory) == false || pInventory == nullptr)
 		{
 			return Elite::BehaviorState::Failure;
 		}
 
-		UINT nrSlots{pInterface->Inventory_GetCapacity()};
 		Item* pItem;
 
 		if (pBlackboard->GetData("TargetItem", pItem) == false)
@@ -325,72 +446,261 @@ namespace BT_Actions
 			return Elite::BehaviorState::Failure;
 		}
 
-		if (pInterface->Item_Grab(pItem->entityInfo, pItem->itemInfo))
+		if (!pInterface->Item_Grab(pItem->entityInfo, pItem->itemInfo))
 		{
-			UINT slotIndex{ *pNextFreeSlot };
-			bool shouldAddItem{ *pNextFreeSlot < nrSlots };
+			return Elite::BehaviorState::Failure;
+		}
 
-			//No free space
-			if (!shouldAddItem)
+		//Check if item is very important
+		InventoryItemType neededItemType{ static_cast<InventoryItemType>(pItem->itemInfo.Type) };
+		InventoryItemType notNeededItemType{ InventoryItemType::Empty };
+
+		int nrShotguns{}, nrPistols{}, nrMedkits{}, nrFood{};
+
+		for (const auto& inventoryPair : *pInventory)
+		{
+			if (static_cast<int>(inventoryPair.second) == static_cast<int>(pItem->itemInfo.Type) || inventoryPair.second == InventoryItemType::Empty)
 			{
-				ItemInfo inventoryItem{};
-				for (UINT index{}; index < nrSlots; ++index)
-				{
-					pInterface->Inventory_GetItem(index, inventoryItem);
-
-					if (inventoryItem.Type == pItem->itemInfo.Type)
-					{
-						switch (inventoryItem.Type)
-						{
-						case eItemType::PISTOL:
-						case eItemType::SHOTGUN:
-							shouldAddItem = pInterface->Weapon_GetAmmo(pItem->itemInfo) > pInterface->Weapon_GetAmmo(inventoryItem);
-							break;
-						case eItemType::FOOD:
-							shouldAddItem = pInterface->Food_GetEnergy(pItem->itemInfo) > pInterface->Food_GetEnergy(inventoryItem);
-							break;
-						case eItemType::MEDKIT:
-							shouldAddItem = pInterface->Medkit_GetHealth(pItem->itemInfo) > pInterface->Medkit_GetHealth(inventoryItem);
-							break;
-						}
-
-						if (shouldAddItem)
-						{
-							slotIndex = index;
-							break;
-						}
-					}
-				}
+				neededItemType = InventoryItemType::Empty;
+				break;
 			}
 
-			//Add item
-			if (shouldAddItem)
+			switch (inventoryPair.second)
 			{
-				pInterface->Inventory_AddItem(slotIndex, pItem->itemInfo);
-				++(*pNextFreeSlot);
-
-				std::vector<Item*>* pItemVector;
-
-				if (pBlackboard->GetData("ItemVector", pItemVector) == false || pItemVector == nullptr)
-				{
-					return Elite::BehaviorState::Failure;
-				}
-
-				auto remover = [&](Item* pItemInVector)->bool
-				{
-					return pItem == pItemInVector;
-				};
-
-				pItemVector->erase(std::remove_if(pItemVector->begin(), pItemVector->end(), remover), pItemVector->end());
+			case InventoryItemType::Pistol:
+				++nrPistols;
+				break;
+			case InventoryItemType::Shotgun:
+				++nrShotguns;
+				break;
+			case InventoryItemType::Medkit:
+				++nrMedkits;
+				break;
+			case InventoryItemType::Food:
+				++nrFood;
+				break;
 			}
-			//Leave on ground
+		}
+
+		if (neededItemType != InventoryItemType::Empty)
+		{
+			const int nrWeapons{ nrPistols + nrShotguns };
+
+			int highestNumber{ (std::max)(nrFood,nrMedkits) };
+			highestNumber = (std::max)(highestNumber, nrWeapons);
+			
+			if (highestNumber == nrFood)
+			{
+				notNeededItemType = InventoryItemType::Food;
+			}
+			else if (highestNumber == nrMedkits)
+			{
+				notNeededItemType = InventoryItemType::Medkit;
+			}
+			else if (nrPistols >= nrShotguns)
+			{
+				notNeededItemType = InventoryItemType::Pistol;
+			}
 			else
 			{
-				std::cout << "Leave on ground!\n";
-				pItem->IsVisited = true;
+				notNeededItemType = InventoryItemType::Shotgun;
+			}
+		}
+
+		//Check for the worst slot
+		UINT slotIndex{ pInventory->size() };
+		int largerstDifference{};
+		int currentDifference{};
+
+		int lowest{1000};
+		int current{};
+
+		ItemInfo inventoryItem{};
+		for (const auto& inventoryPair : *pInventory)
+		{
+			//Place in inventory
+			if (inventoryPair.second == InventoryItemType::Empty)
+			{
+				slotIndex = inventoryPair.first;
+				break;
+			}
+			//Replace worst item of the same type
+			else if (static_cast<int>(inventoryPair.second) == static_cast<int>(pItem->itemInfo.Type))
+			{
+				pInterface->Inventory_GetItem(inventoryPair.first, inventoryItem);
+
+				switch (inventoryItem.Type)
+				{
+				case eItemType::PISTOL:
+					current = pInterface->Weapon_GetAmmo(inventoryItem);
+					currentDifference = pInterface->Weapon_GetAmmo(pItem->itemInfo) - current;
+					if (current > 4) continue;
+					break;
+				case eItemType::SHOTGUN:
+					currentDifference = 1;
+					break;
+				case eItemType::FOOD:
+					currentDifference = pInterface->Food_GetEnergy(pItem->itemInfo) - pInterface->Food_GetEnergy(inventoryItem);
+					break;
+				case eItemType::MEDKIT:
+					currentDifference = pInterface->Medkit_GetHealth(pItem->itemInfo) - pInterface->Medkit_GetHealth(inventoryItem);
+					break;
+				}
+
+				if (currentDifference > largerstDifference)
+				{
+					largerstDifference = currentDifference;
+					slotIndex = inventoryPair.first;
+				}
+			}
+			//Item is very important, replace worst item of another type
+			else if (static_cast<int>(neededItemType) == static_cast<int>(pItem->itemInfo.Type) && notNeededItemType == inventoryPair.second)
+			{
+				std::cout << "item is very important!\n";
+				pInterface->Inventory_GetItem(inventoryPair.first, inventoryItem);
+
+				switch (inventoryItem.Type)
+				{
+				case eItemType::PISTOL:
+					current = pInterface->Weapon_GetAmmo(inventoryItem);
+				case eItemType::SHOTGUN:
+					current = 5;
+					break;
+				case eItemType::FOOD:
+					current = pInterface->Food_GetEnergy(inventoryItem);
+					break;
+				case eItemType::MEDKIT:
+					current = pInterface->Medkit_GetHealth(inventoryItem);
+					break;
+				}
+
+				if (current <= lowest)
+				{
+					lowest = current;
+					slotIndex = inventoryPair.first;
+				}
+			}
+		}
+
+		//Add item
+		if (slotIndex != pInventory->size())
+		{
+			//Remove old item
+			if ((*pInventory)[slotIndex].second != InventoryItemType::Empty)
+			{
+				pInterface->Inventory_RemoveItem(slotIndex);
 			}
 
-			return Elite::BehaviorState::Success;
+			//Add new item to inventory
+			(*pInventory)[slotIndex].second = static_cast<InventoryItemType>(pItem->itemInfo.Type);
+
+			pInterface->Inventory_AddItem(slotIndex, pItem->itemInfo);
+
+			//Remove from item list
+			std::vector<Item*>* pItemVector;
+
+			if (pBlackboard->GetData("ItemVector", pItemVector) == false || pItemVector == nullptr)
+			{
+				return Elite::BehaviorState::Failure;
+			}
+
+			auto remover = [&](Item* pItemInVector)->bool
+			{
+				return pItem == pItemInVector;
+			};
+
+			pItemVector->erase(std::remove_if(pItemVector->begin(), pItemVector->end(), remover), pItemVector->end());
+		}
+		//Leave on ground
+		else
+		{
+			std::cout << "Leave on ground!\n";
+			pItem->IsVisited = true;
+		}
+
+		return Elite::BehaviorState::Success;
+	}
+
+	Elite::BehaviorState HandleFoodAndMedkitUsage(Elite::Blackboard* pBlackboard)
+	{
+		IExamInterface* pInterface;
+
+		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		std::vector<std::pair<int, InventoryItemType>>* pInventory{};
+
+		if (pBlackboard->GetData("Inventory", pInventory) == false || pInventory == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		AgentInfo* pAgentInfo{};
+		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false || pAgentInfo == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		ItemInfo inventoryItem{};
+		
+		//Medkit
+		if (pAgentInfo->Health < 9)
+		{
+			const float neededHealth{ 10 - pAgentInfo->Health };
+
+			for (auto& inventoryPair : *pInventory)
+			{
+				//Continue if not medkit
+				if (inventoryPair.second != InventoryItemType::Medkit) continue;
+
+				//Continue if to good
+				pInterface->Inventory_GetItem(inventoryPair.first, inventoryItem);
+				if (pInterface->Medkit_GetHealth(inventoryItem) > neededHealth) continue;
+
+				//Use item
+				pInterface->Inventory_UseItem(inventoryPair.first);
+
+				//Remove if empty
+				pInterface->Inventory_GetItem(inventoryPair.first, inventoryItem);
+				if (pInterface->Medkit_GetHealth(inventoryItem) == 0)
+				{
+					inventoryPair.second = InventoryItemType::Empty;
+					pInterface->Inventory_RemoveItem(inventoryPair.first);
+				}
+				
+				return Elite::BehaviorState::Success;
+			}
+		}
+
+		//Food
+		if (pAgentInfo->Energy < 9)
+		{
+			const float neededEnergy{ 10 - pAgentInfo->Energy };
+
+			for (auto& inventoryPair : *pInventory)
+			{
+				//Continue if not food
+				if (inventoryPair.second != InventoryItemType::Food) continue;
+
+				//Continue if to good
+				pInterface->Inventory_GetItem(inventoryPair.first, inventoryItem);
+				if (pInterface->Food_GetEnergy(inventoryItem) > neededEnergy) continue;
+
+				//Use item
+				pInterface->Inventory_UseItem(inventoryPair.first);
+
+				//Remove if empty
+				pInterface->Inventory_GetItem(inventoryPair.first, inventoryItem);
+				if (pInterface->Food_GetEnergy(inventoryItem) == 0)
+				{
+					inventoryPair.second = InventoryItemType::Empty;
+					pInterface->Inventory_RemoveItem(inventoryPair.first);
+				}
+
+				return Elite::BehaviorState::Success;
+			}
 		}
 
 		return Elite::BehaviorState::Failure;
@@ -464,6 +774,36 @@ namespace BT_Actions
 		}
 
 		return Elite::BehaviorState::Failure;
+	}
+
+	Elite::BehaviorState ChangeToFaceTarget(Elite::Blackboard* pBlackboard)
+	{
+		ISteeringBehavior* pCurrentSteering;
+
+		Face* pFace;
+		if (pBlackboard->GetData("Face", pFace) == false || pFace == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		Elite::Vector2 target;
+		if (pBlackboard->GetData("Target", target) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		pFace->SetTarget(target);
+
+		pCurrentSteering = pFace;
+
+		if (pBlackboard->ChangeData("CurrentSteering", pCurrentSteering))
+		{
+			return Elite::BehaviorState::Success;
+		}
+		else
+		{
+			return Elite::BehaviorState::Failure;
+		}
 	}
 
 	Elite::BehaviorState ChangeToFaceAndSeekTarget(Elite::Blackboard* pBlackboard)
@@ -552,6 +892,49 @@ namespace BT_Actions
 		}
 	}
 
+	Elite::BehaviorState ChangeToWanderAndSeekTarget(Elite::Blackboard* pBlackboard)
+	{
+		ISteeringBehavior* pCurrentSteering;
+
+		Seek* pSeek;
+		if (pBlackboard->GetData("Seek", pSeek) == false || pSeek == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		Wander* pWander;
+		if (pBlackboard->GetData("Wander", pWander) == false || pWander == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		AddedSteering* pWanderAndSeek;
+		if (pBlackboard->GetData("WanderAndSeek", pWanderAndSeek) == false || pWanderAndSeek == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		Elite::Vector2 target;
+		if (pBlackboard->GetData("Target", target) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		pWander->SetTarget(target);
+		pSeek->SetTarget(target);
+
+		pCurrentSteering = pWanderAndSeek;
+
+		if (pBlackboard->ChangeData("CurrentSteering", pCurrentSteering))
+		{
+			return Elite::BehaviorState::Success;
+		}
+		else
+		{
+			return Elite::BehaviorState::Failure;
+		}
+	}
+
 	Elite::BehaviorState ChangeToSeekAndFaceTarget(Elite::Blackboard* pBlackboard)
 	{
 		ISteeringBehavior* pCurrentSteering;
@@ -580,7 +963,64 @@ namespace BT_Actions
 			return Elite::BehaviorState::Failure;
 		}
 
+		AgentInfo* pAgentInfo{};
+		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false || pAgentInfo == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
 		pFace->SetTarget(target);
+		pSeek->SetTarget(target);
+
+		pCurrentSteering = pSeekAndFace;
+
+		if (pBlackboard->ChangeData("CurrentSteering", pCurrentSteering))
+		{
+			return Elite::BehaviorState::Success;
+		}
+		else
+		{
+			return Elite::BehaviorState::Failure;
+		}
+	}
+
+	Elite::BehaviorState ChangeToSeekTargetAndFaceBack(Elite::Blackboard* pBlackboard)
+	{
+		ISteeringBehavior* pCurrentSteering;
+
+		Seek* pSeek;
+		if (pBlackboard->GetData("Seek", pSeek) == false || pSeek == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		Face* pFace;
+		if (pBlackboard->GetData("Face", pFace) == false || pFace == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		AddedSteering* pSeekAndFace;
+		if (pBlackboard->GetData("SeekAndFace", pSeekAndFace) == false || pSeekAndFace == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		Elite::Vector2 target;
+		if (pBlackboard->GetData("Target", target) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		AgentInfo* pAgentInfo{};
+		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false || pAgentInfo == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		const Elite::Vector2 faceTarget{ pAgentInfo->Position * 2.f - target };
+
+		pFace->SetTarget(faceTarget);
 		pSeek->SetTarget(target);
 
 		pCurrentSteering = pSeekAndFace;
@@ -623,28 +1063,47 @@ namespace BT_Actions
 			return Elite::BehaviorState::Failure;
 		}
 	}
-
-	//House
-
-	Elite::BehaviorState SetTargetHouseDoorAsTarget(Elite::Blackboard* pBlackboard)
+	//Purge Zones
+	Elite::BehaviorState SetClosestPurgeZoneAsTarget(Elite::Blackboard* pBlackboard)
 	{
-		House* pHouse{};
-		if (pBlackboard->GetData("TargetHouse", pHouse) == false || pHouse == nullptr)
+		AgentInfo* pAgentInfo;
+		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false)
 		{
 			return Elite::BehaviorState::Failure;
 		}
 
-		IExamInterface* pInterface;
+		std::vector<PurgeZone*>* pPurgeZones;
 
+		if (pBlackboard->GetData("PurgeVector", pPurgeZones) == false || pPurgeZones == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		PurgeZone* pClosestPurgeZone{};
+		float closestDistSq{ INFINITY };
+
+		for (auto* pPurgeZone : *pPurgeZones)
+		{
+			float distSq = pPurgeZone->Center.DistanceSquared(pAgentInfo->Position);
+
+			if (distSq < closestDistSq)
+			{
+				closestDistSq = distSq;
+				pClosestPurgeZone = pPurgeZone;
+			}
+		}
+
+		IExamInterface* pInterface;
 		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
 		{
 			return Elite::BehaviorState::Failure;
 		}
-		pBlackboard->ChangeData("Target", pInterface->NavMesh_GetClosestPathPoint(pHouse->DoorLocation));
+
+		pBlackboard->ChangeData("Target", pInterface->NavMesh_GetClosestPathPoint(pClosestPurgeZone->Center));
 
 		return Elite::BehaviorState::Success;
 	}
-
+	//House
 	Elite::BehaviorState SetClosestNotVisitedSearchPointAsTarget(Elite::Blackboard* pBlackboard)
 	{
 		AgentInfo* pAgentInfo;
@@ -695,9 +1154,9 @@ namespace BT_Actions
 			return Elite::BehaviorState::Failure;
 		}
 
-		std::vector<House*>* pHouse;
+		std::vector<House*>* pHouses;
 
-		if (pBlackboard->GetData("HouseVector", pHouse) == false || pHouse == nullptr)
+		if (pBlackboard->GetData("HouseVector", pHouses) == false || pHouses == nullptr)
 		{
 			return Elite::BehaviorState::Failure;
 		}
@@ -705,7 +1164,7 @@ namespace BT_Actions
 		House* pClosestSearchPoint{};
 		float closestDistSq{ INFINITY };
 
-		for (auto& pHouse : *pHouse)
+		for (auto& pHouse : *pHouses)
 		{
 			if (pHouse->IsVisited == true) continue;
 
@@ -862,10 +1321,9 @@ namespace BT_Conditions
 			return false;
 		}
 
-		auto finder = [&](Item* pItemInVec)->bool {return pItemInVec->IsVisited == false; };
-		auto iterator{ std::find_if(pItemVector->begin(), pItemVector->end(), finder) };
+		auto findNotVisited = [&](Item* pItem)->bool {return pItem->IsVisited == false; };
 
-		return iterator != pItemVector->end();
+		return pItemVector->end() != std::find_if(pItemVector->begin(), pItemVector->end(), findNotVisited);
 	}
 
 	//Enemy
@@ -882,81 +1340,53 @@ namespace BT_Conditions
 		return !pEnemyVector->empty();
 	}
 
-	bool WasBitten(Elite::Blackboard* pBlackboard)
+	//Purge Zones
+	bool IsInPurgeZone(Elite::Blackboard* pBlackboard)
 	{
-		AgentInfo* pAgentInfo;
+		std::vector<PurgeZone*>* pPurgeZones{};
+		if (pBlackboard->GetData("PurgeVector", pPurgeZones) == false || pPurgeZones == nullptr)
+		{
+			return false;
+		}
 
+		AgentInfo* pAgentInfo{};
 		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false || pAgentInfo == nullptr)
 		{
 			return false;
 		}
 
-		return pAgentInfo->WasBitten;
+		for (PurgeZone* pPurgeZone : *pPurgeZones)
+		{
+			const float squaredDistance{ pAgentInfo->Position.DistanceSquared(pPurgeZone->Center) };
+			if (squaredDistance + 20.f < (pPurgeZone->Radius * pPurgeZone->Radius))
+			{
+				std::cout << "Is in purge zone!!\n";
+				return true;
+			}
+		}
+		
+		return false;
 	}
 
 	//House
-
-	bool IsInsideAHouse(Elite::Blackboard* pBlackboard)
+	bool IsAgentInsideTargetHouse(Elite::Blackboard* pBlackboard)
 	{
-		AgentInfo* pAgentInfo{};
+		House* pHouse{};
+		if (pBlackboard->GetData("TargetHouse", pHouse) == false || pHouse == nullptr)
+		{
+			return false;
+		}
 
+		AgentInfo* pAgentInfo{};
 		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false || pAgentInfo == nullptr)
 		{
 			return false;
-		}	
-
-		return pAgentInfo->IsInHouse;
-	}
-
-	bool IsEnoughTimeInHouse(Elite::Blackboard* pBlackboard)
-	{
-		House* pHouse{};
-		if (pBlackboard->GetData("TargetHouse", pHouse) == false)
-		{
-			return false;
 		}
 
-		const float enoughTime{ 3.f };
+		Elite::Vector2 halfSize{ pHouse->Size / 2.f };
+		Elite::Vector2 distance{ pAgentInfo->Position - pHouse->Center };
 
-		return pHouse->TimeInside >= enoughTime;
-	}
-
-	bool IsAgentInsideThisHouse(Elite::Blackboard* pBlackboard)
-	{
-		Elite::Vector2 target;
-		if (pBlackboard->GetData("Target", target) == false)
-		{
-			return false;
-		}
-
-		House* pHouse{};
-		if (pBlackboard->GetData("TargetHouse", pHouse) == false)
-		{
-			return false;
-		}
-
-		AgentInfo* pAgentInfo{};
-		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false)
-		{
-			return false;
-		}
-
-		if (pAgentInfo->IsInHouse)
-		{
-			if (pHouse->DoorLocation == pHouse->Center)
-			{
-				Elite::Vector2 difference{ pAgentInfo->Position - pHouse->Center };
-
-				//Makes going outside smoother, when multiplier is larger 
-				pHouse->DoorLocation += difference * 10.f;
-			}
-
-			return true;
-		}
-		else
-		{
-			return false;
-		}
+		return abs(distance.x) < halfSize.x && abs(distance.y) < halfSize.y;
 	}
 
 	bool IsNotVisitedHouseInVector(Elite::Blackboard* pBlackboard)
@@ -1030,15 +1460,44 @@ namespace BT_Conditions
 			return false;
 		}
 
-		float currentOrientation{ pAgentInfo->Orientation };
+		const float currentOrientation{ pAgentInfo->Orientation };
+		const float desiredOrientation{ Elite::VectorToOrientation(target - pAgentInfo->Position) };
 
-		float desiredOrientation{ Elite::VectorToOrientation(target - pAgentInfo->Position) };
-
-
-		return abs(currentOrientation - desiredOrientation) < 0.1f;
+		return abs(currentOrientation - desiredOrientation) < 0.07f;
 	}
 
 	//Rotation
+
+	bool ShouldLookBack(Elite::Blackboard* pBlackboard)
+	{
+		float* pDeltaTime{};
+		if (pBlackboard->GetData("DeltaTime", pDeltaTime) == false || pDeltaTime == nullptr)
+		{
+			return false;
+		}
+
+		float* pWalkingTime{};
+		if (pBlackboard->GetData("WalkingTime", pWalkingTime) == false || pWalkingTime == nullptr)
+		{
+			return false;
+		}
+
+		*pWalkingTime += *pDeltaTime;
+
+		if (*pWalkingTime >= 7.f)
+		{
+			*pWalkingTime = 0.f;
+			return false;
+		}
+		else if(*pWalkingTime >= 5.f)
+		{
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
 
 	bool IsAgentNotRotating(Elite::Blackboard* pBlackboard)
 	{
@@ -1072,6 +1531,29 @@ namespace BT_Conditions
 
 		//Cross < 0.f -> left, Dot > 0.5f half of the positive side
 		return Elite::Cross(startVector, currentVector) < -0.2f && Elite::Dot(startVector, currentVector) > 0.5f;
+	}
+
+	bool HasNoWeapon(Elite::Blackboard* pBlackboard)
+	{
+
+		std::vector<std::pair<int, InventoryItemType>>* pInventory;
+
+		if (pBlackboard->GetData("Inventory", pInventory) == false || pInventory == nullptr)
+		{
+			return false;
+		}
+
+		bool hasWeapon{ false };
+		for (const auto& inventoryPair : *pInventory)
+		{
+			if (inventoryPair.second == InventoryItemType::Pistol || inventoryPair.second == InventoryItemType::Shotgun)
+			{
+				hasWeapon = true;
+				break;
+			}
+		}
+
+		return !hasWeapon;
 	}
 }
 

@@ -1,7 +1,6 @@
 #pragma once
 #include "IExamPlugin.h"
-#include "Exam_HelperStructs.h"
-
+#include "Extensions.h"
 #include "EliteAI/EliteDecisionMaking/EDecisionMaking.h"
 
 class IBaseInterface;
@@ -39,8 +38,6 @@ private:
 	std::vector<HouseInfo> GetHousesInFOV() const;
 	std::vector<EntityInfo> GetEntitiesInFOV() const;
 
-	UINT m_InventorySlot = 0;
-
 	//Added private functions
 	Elite::Blackboard* CreateBlackboard();
 
@@ -53,32 +50,33 @@ private:
 	Face* m_pFaceBehaviour{};
 	Flee* m_pFleeBehaviour{};
 	RotateClockWise* m_pRotateClockWiseBehaviour{};
+	AddedSteering* m_pWanderAndSeekBehaviour{};
 	AddedSteering* m_pSeekAndFaceBehaviour{};
 	AddedSteering* m_pFleeAndFaceBehaviour{};
 	PrioritySteering* m_pFaceAndSeekBehaviour{};
 
 	//AgentInfo
 	AgentInfo m_AgentInfo{};
-	bool m_IsEnemyNearBy = false;
-
-	float m_TimeSinceBitten{};
-
-	//Pair entityInfo + itemInfo
+	
+	//Vectors
 	std::vector <Item*> m_pItems{};
-	//Pair houseInfo + isVisited
+	std::vector <PurgeZone*> m_pPurgeZones{};
 	std::vector<House*> m_pHouses{};
 	std::vector<GridElement*> m_pGrid{};
 	std::vector<EnemyInfo> m_Enemies{};
+	std::vector<std::pair<int, InventoryItemType>> m_Inventory{};
 	float m_CellSize{};
-
-	bool m_IsInsideHouse{};
 
 	bool m_IsRotating{false};
 	float m_StartOrientation{};
 
-	UINT m_NextFreeSlot{};
-
 	GridElement* m_pCurrentGridElement{};
+
+	bool m_ShouldRun{false};
+
+	float m_DeltaTime{};
+	float m_WalkingTime{};
+	float m_AlertedTime{};
 };
 
 //ENTRY

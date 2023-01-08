@@ -10,8 +10,8 @@
 //-----------------------------------------------------------------
 // Includes & Forward Declarations
 //-----------------------------------------------------------------
-#include "Exam_HelperStructs.h"
 #include "SteeringHelpers.h"
+#include "Extensions.h"
 struct AgentInfo;
 
 #pragma region **ISTEERINGBEHAVIOR** (BASE)
@@ -90,7 +90,7 @@ public:
 ///////////////////////////////////////
 //WANDER
 //****
-class Wander : public Seek
+class Wander : public Face
 {
 public:
 	Wander() = default;
@@ -100,13 +100,10 @@ public:
 	SteeringPlugin_Output_Extension CalculateSteering(float deltaT, AgentInfo& agentInfo) override;
 
 	void SetWanderOffset(float offset) { m_OffsetDistance = offset; }
-	void SetWanderRadius(float radius) { m_Radius = radius; }
-	void SetMaxAngleChange(float rad) { m_MaxAngleChange = rad; }
 
 protected:
 	float m_OffsetDistance = 6.f; //Offset (AgentDirection)
-	float m_Radius = 6.f; //WanderRadius
-	float m_MaxAngleChange = Elite::ToRadians(45.f); //Max WanderAngle change per frame
+	float m_CurrentDirection = 1.f; //positive or negative
 	float m_WanderAngle = 0.f; //Internal
 };
 
