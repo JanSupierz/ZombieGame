@@ -59,6 +59,33 @@ namespace BT_Actions
 					target = pGridElement->Position;
 				}
 			}
+
+			if (bestInfluence < 0.2f)
+			{
+				std::vector<GridElement*>* pGrid{};
+
+				if (pBlackboard->GetData("GridVector", pGrid) == false || pCell == nullptr)
+				{
+					return Elite::BehaviorState::Failure;
+				}
+
+				for (GridElement* pGridElement : *pGrid)
+				{
+					if (pGridElement->IsVisited) continue;
+
+					if (bestInfluence > 0.f)
+					{
+						//Go for long distances only when it is worth it
+						if (pGridElement->Influence < 0.6f) continue;
+					}
+					
+					if (bestInfluence <= pGridElement->Influence)
+					{
+						bestInfluence = pGridElement->Influence;
+						target = pGridElement->Position;
+					}
+				}
+			}
 		}
 		else
 		{
@@ -110,7 +137,7 @@ namespace BT_Actions
 		Elite::Vector2 startVector{ Elite::OrientationToVector(*pStartOrientation) };
 		Elite::Vector2 currentVector{ Elite::OrientationToVector(pAgentInfo->Orientation) };
 
-		*pIsCompleted = Elite::Cross(startVector, currentVector) < -0.2f && Elite::Dot(startVector, currentVector) > 0.5f;
+		*pIsCompleted = Elite::Cross(startVector, currentVector) > 0.2f && Elite::Dot(startVector, currentVector) > 0.5f;
 
 		return Elite::BehaviorState::Success;
 	}
@@ -166,14 +193,6 @@ namespace BT_Actions
 		{
 			return Elite::BehaviorState::Failure;
 		}
-
-		RotateClockWise* pRotateClockWise;
-		if (pBlackboard->GetData("RotateClockWise", pRotateClockWise) == false || pRotateClockWise == nullptr)
-		{
-			return Elite::BehaviorState::Failure;
-		}
-
-		pRotateClockWise->SetTarget(target);
 
 		*pStartOrientation = pAgentInfo->Orientation;
 		return Elite::BehaviorState::Success;
@@ -1362,7 +1381,14 @@ namespace BT_Conditions
 			return false;
 		}
 
-		auto findNotVisited = [&](Item* pItem)->bool {return pItem->IsVisited == false; };
+		House* pTargetHouse{};
+
+		if (pBlackboard->GetData("TargetHouse", pTargetHouse) == false || pTargetHouse == nullptr)
+		{
+			return false;
+		}
+
+		auto findNotVisited = [&](Item* pItem)->bool {return pItem->IsVisited == false && pItem->pHouse == pTargetHouse; };
 
 		return pItemVector->end() != std::find_if(pItemVector->begin(), pItemVector->end(), findNotVisited);
 	}
@@ -1483,7 +1509,7 @@ namespace BT_Conditions
 			return false;
 		}
 
-		return !(target.DistanceSquared(pAgentInfo->Position) < 4.f);
+		return !(target.DistanceSquared(pAgentInfo->Position) < 25.f);
 	}
 
 	bool IsAimingFinished(Elite::Blackboard* pBlackboard)

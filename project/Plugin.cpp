@@ -39,7 +39,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 
 	const Elite::Vector2 startPos{ world.Center - world.Dimensions / 2.f };
 
-	constexpr int nrCells{ 9 };
+	constexpr int nrCells{ 15 };
 	m_CellSize = world.Dimensions.x / nrCells;
 
 	for (int x{}; x < nrCells; ++x)
@@ -90,41 +90,41 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 		{
 			//Item usage
 			new Elite::BehaviorAction(BT_Actions::HandleFoodAndMedkitUsage),
-			//Purge Zones
-			new Elite::BehaviorSequence(
-			{
-				new Elite::BehaviorConditional(BT_Conditions::IsInPurgeZone),
-				new Elite::BehaviorAction(BT_Actions::SetRunning),
-				new Elite::BehaviorAction(BT_Actions::SetClosestPointOutsidePurgeZoneAsTarget),
-				new Elite::BehaviorAction(BT_Actions::ChangeToSeekTarget)
-			}),
 			//Enemies
 			new Elite::BehaviorSelector(
 			{
-					//Enemy in view
-					new Elite::BehaviorSequence(
+				//Enemy in view
+				new Elite::BehaviorSequence(
+				{
+					new Elite::BehaviorConditional(BT_Conditions::IsEnemyInVector),
+					new Elite::BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
+					new Elite::BehaviorSelector(
 					{
-						new Elite::BehaviorConditional(BT_Conditions::IsEnemyInVector),
-						new Elite::BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
-						new Elite::BehaviorSelector(
+						//Agent has no weapon
+						new Elite::BehaviorSequence(
 						{
-								//Agent has no weapon
-								new Elite::BehaviorSequence(
-								{
-									new Elite::BehaviorConditional(BT_Conditions::HasNoWeapon),
-									new Elite::BehaviorAction(BT_Actions::SetRunning),
-									new Elite::BehaviorAction(BT_Actions::ChangeToFleeAndFaceTarget)
-								}),
-							//Aiming finished
-							new Elite::BehaviorSequence(
-							{
-								new Elite::BehaviorConditional(BT_Conditions::IsAimingFinished),
-								new Elite::BehaviorAction(BT_Actions::HandleShooting)
-							}),
-							//Aim at the target
-							new Elite::BehaviorAction(BT_Actions::ChangeToFaceTarget)
+							new Elite::BehaviorConditional(BT_Conditions::HasNoWeapon),
+							new Elite::BehaviorAction(BT_Actions::SetRunning),
+							new Elite::BehaviorAction(BT_Actions::ChangeToFleeAndFaceTarget)
 						}),
+						//Aiming finished
+						new Elite::BehaviorSequence(
+						{
+							new Elite::BehaviorConditional(BT_Conditions::IsAimingFinished),
+							new Elite::BehaviorAction(BT_Actions::HandleShooting)
+						}),
+						//Aim at the target
+						new Elite::BehaviorAction(BT_Actions::ChangeToFaceTarget)
 					}),
+				}),
+				//Purge Zones
+				new Elite::BehaviorSequence(
+				{
+					new Elite::BehaviorConditional(BT_Conditions::IsInPurgeZone),
+					new Elite::BehaviorAction(BT_Actions::SetRunning),
+					new Elite::BehaviorAction(BT_Actions::SetClosestPointOutsidePurgeZoneAsTarget),
+					new Elite::BehaviorAction(BT_Actions::ChangeToSeekTarget)
+				}),
 				//Attack from behind
 				new Elite::BehaviorSequence(
 				{
@@ -162,7 +162,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 									new Elite::BehaviorSequence(
 									{
 										new Elite::BehaviorConditional(BT_Conditions::HasNotArrivedAtLocation),
-										new Elite::BehaviorAction(BT_Actions::ChangeToSeekAndFaceTarget)
+										new Elite::BehaviorAction(BT_Actions::ChangeToSeekTarget)
 									}),
 									new Elite::BehaviorSequence(
 									{
@@ -375,7 +375,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 				pPurgeZone->Center = purgeZoneInfo.Center;
 				pPurgeZone->Radius = purgeZoneInfo.Radius + 10.f;
 				pPurgeZone->ZoneHash = purgeZoneInfo.ZoneHash;
-				pPurgeZone->EstimatedLifeTime = 6.f;
+				pPurgeZone->EstimatedLifeTime = 4.5f;
 
 				m_pPurgeZones.push_back(pPurgeZone);
 			}
@@ -491,8 +491,8 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 
 			for (House* pHouse : m_pHouses)
 			{
-				const float divider{ (pGridElement->Position.Distance(pHouse->Center)) / 50.f };
-				pGridElement->Influence += 1.f / divider;
+				const float nrCellsAway{ (pGridElement->Position.Distance(pHouse->Center)) / m_CellSize };
+				pGridElement->Influence += 1.f / (nrCellsAway * nrCellsAway * nrCellsAway);
 			}
 		}
 	}
@@ -508,7 +508,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 		steering = pCurrentSteering->CalculateSteering(dt, m_AgentInfo);
 		m_pInterface->Draw_Direction(m_AgentInfo.Position, steering.LinearVelocity, 10.f, Elite::Vector3{ 1.f,1.f,1.f });
 
-		steering.RunMode = m_ShouldRun;
+		steering.RunMode = m_ShouldRun || m_AgentInfo.Stamina > 5.f;
 	}
 
 	return steering;

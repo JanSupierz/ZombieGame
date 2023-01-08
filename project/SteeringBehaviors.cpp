@@ -184,10 +184,10 @@ SteeringPlugin_Output_Extension Evade::CalculateSteering(float deltaT, AgentInfo
 //Rotate clock wise
 SteeringPlugin_Output_Extension RotateClockWise::CalculateSteering(float deltaT, AgentInfo& agentInfo)
 {
-	SteeringPlugin_Output_Extension steering{ Arrive::CalculateSteering(deltaT,agentInfo) };
+	SteeringPlugin_Output_Extension steering{};
 
 	steering.AutoOrient = false;
-	steering.AngularVelocity = agentInfo.MaxAngularSpeed;
+	steering.AngularVelocity = -agentInfo.MaxAngularSpeed;
 
 	return steering;
 }

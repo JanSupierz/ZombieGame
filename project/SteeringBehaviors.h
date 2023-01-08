@@ -139,7 +139,7 @@ private:
 ///////////////////////////////////////
 //ROTATE CLOCK WISE
 //****
-class RotateClockWise : public Arrive
+class RotateClockWise : public ISteeringBehavior
 {
 public:
 	RotateClockWise() = default;
