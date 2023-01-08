@@ -86,6 +86,58 @@ namespace BT_Actions
 	}
 	//Rotation
 
+	Elite::BehaviorState UpdateRotation(Elite::Blackboard* pBlackboard)
+	{
+		bool* pIsCompleted{};
+
+		if (pBlackboard->GetData("IsRotationCompleted", pIsCompleted) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		float* pStartOrientation{};
+		if (pBlackboard->GetData("StartOrientation", pStartOrientation) == false || pStartOrientation == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		AgentInfo* pAgentInfo;
+		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		Elite::Vector2 startVector{ Elite::OrientationToVector(*pStartOrientation) };
+		Elite::Vector2 currentVector{ Elite::OrientationToVector(pAgentInfo->Orientation) };
+
+		*pIsCompleted = Elite::Cross(startVector, currentVector) < -0.2f && Elite::Dot(startVector, currentVector) > 0.5f;
+
+		return Elite::BehaviorState::Success;
+	}
+
+	Elite::BehaviorState ResetRotation(Elite::Blackboard* pBlackboard)
+	{
+		bool* pIsRotating{};
+
+		if (pBlackboard->GetData("IsRotating", pIsRotating) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		*pIsRotating = false;
+
+		bool* pIsCompleted{};
+
+		if (pBlackboard->GetData("IsRotationCompleted", pIsCompleted) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		*pIsCompleted = false;
+
+		return Elite::BehaviorState::Success;
+	}
+
 	Elite::BehaviorState InitializeRotating(Elite::Blackboard* pBlackboard)
 	{
 		bool* pIsRotating{};
@@ -124,20 +176,6 @@ namespace BT_Actions
 		pRotateClockWise->SetTarget(target);
 
 		*pStartOrientation = pAgentInfo->Orientation;
-		return Elite::BehaviorState::Success;
-	}
-
-	Elite::BehaviorState SetRotationCompleted(Elite::Blackboard* pBlackboard)
-	{
-		bool* pIsRotating{};
-
-		if (pBlackboard->GetData("IsRotating", pIsRotating) == false)
-		{
-			return Elite::BehaviorState::Failure;
-		}
-
-		*pIsRotating = false;
-
 		return Elite::BehaviorState::Success;
 	}
 
@@ -1064,7 +1102,7 @@ namespace BT_Actions
 		}
 	}
 	//Purge Zones
-	Elite::BehaviorState SetClosestPurgeZoneAsTarget(Elite::Blackboard* pBlackboard)
+	Elite::BehaviorState SetClosestPointOutsidePurgeZoneAsTarget(Elite::Blackboard* pBlackboard)
 	{
 		AgentInfo* pAgentInfo;
 		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false)
@@ -1093,13 +1131,16 @@ namespace BT_Actions
 			}
 		}
 
+		Elite::Vector2 direction{ pAgentInfo->Position - pClosestPurgeZone->Center };
+		direction.Normalize();
+
 		IExamInterface* pInterface;
 		if (pBlackboard->GetData("Interface", pInterface) == false || pInterface == nullptr)
 		{
 			return Elite::BehaviorState::Failure;
 		}
 
-		pBlackboard->ChangeData("Target", pInterface->NavMesh_GetClosestPathPoint(pClosestPurgeZone->Center));
+		pBlackboard->ChangeData("Target", pInterface->NavMesh_GetClosestPathPoint(pClosestPurgeZone->Center + direction * pClosestPurgeZone->Radius));
 
 		return Elite::BehaviorState::Success;
 	}
@@ -1260,7 +1301,7 @@ namespace BT_Conditions
 		}
 	}
 
-	bool IsItemInGrabRange(Elite::Blackboard* pBlackboard)
+	bool IsItemNotInGrabRange(Elite::Blackboard* pBlackboard)
 	{
 		Item* pItem{};
 
@@ -1304,11 +1345,11 @@ namespace BT_Conditions
 
 		if (pItem->itemInfo.Location.DistanceSquared(pAgentInfo->Position) <= pAgentInfo->GrabRange * pAgentInfo->GrabRange && isInFov)
 		{
-			return true;
+			return false;
 		}
 		else
 		{
-			return false;
+			return true;
 		}
 	}
 
@@ -1358,7 +1399,7 @@ namespace BT_Conditions
 		for (PurgeZone* pPurgeZone : *pPurgeZones)
 		{
 			const float squaredDistance{ pAgentInfo->Position.DistanceSquared(pPurgeZone->Center) };
-			if (squaredDistance + 20.f < (pPurgeZone->Radius * pPurgeZone->Radius))
+			if (squaredDistance - 50.f < pPurgeZone->Radius * pPurgeZone->Radius)
 			{
 				std::cout << "Is in purge zone!!\n";
 				return true;
@@ -1369,7 +1410,7 @@ namespace BT_Conditions
 	}
 
 	//House
-	bool IsAgentInsideTargetHouse(Elite::Blackboard* pBlackboard)
+	bool IsAgentNotInsideTargetHouse(Elite::Blackboard* pBlackboard)
 	{
 		House* pHouse{};
 		if (pBlackboard->GetData("TargetHouse", pHouse) == false || pHouse == nullptr)
@@ -1386,7 +1427,7 @@ namespace BT_Conditions
 		Elite::Vector2 halfSize{ pHouse->Size / 2.f };
 		Elite::Vector2 distance{ pAgentInfo->Position - pHouse->Center };
 
-		return abs(distance.x) < halfSize.x && abs(distance.y) < halfSize.y;
+		return !(abs(distance.x) < halfSize.x && abs(distance.y) < halfSize.y);
 	}
 
 	bool IsNotVisitedHouseInVector(Elite::Blackboard* pBlackboard)
@@ -1427,7 +1468,7 @@ namespace BT_Conditions
 
 	//Arriving
 
-	bool HasArrivedAtLocation(Elite::Blackboard* pBlackboard)
+	bool HasNotArrivedAtLocation(Elite::Blackboard* pBlackboard)
 	{
 		Elite::Vector2 target{};
 		if (pBlackboard->GetData("Target", target) == false)
@@ -1442,7 +1483,7 @@ namespace BT_Conditions
 			return false;
 		}
 
-		return target.DistanceSquared(pAgentInfo->Position) < 4.f;
+		return !(target.DistanceSquared(pAgentInfo->Position) < 4.f);
 	}
 
 	bool IsAimingFinished(Elite::Blackboard* pBlackboard)
@@ -1511,26 +1552,16 @@ namespace BT_Conditions
 		return !(*pIsRotating);
 	}
 
-	bool IsRotationCompleted(Elite::Blackboard* pBlackboard)
+	bool IsRotationNotCompleted(Elite::Blackboard* pBlackboard)
 	{
-		float* pStartOrientation{};
-		if (pBlackboard->GetData("StartOrientation", pStartOrientation) == false || pStartOrientation == nullptr)
+		bool* pIsRotationCompleted{};
+
+		if (pBlackboard->GetData("IsRotationCompleted", pIsRotationCompleted) == false)
 		{
 			return false;
 		}
 
-		AgentInfo* pAgentInfo{};
-
-		if (pBlackboard->GetData("AgentInfo", pAgentInfo) == false || pAgentInfo == nullptr)
-		{
-			return false;
-		}
-
-		const Elite::Vector2 startVector{ Elite::OrientationToVector(*pStartOrientation) };
-		const Elite::Vector2 currentVector{ Elite::OrientationToVector(pAgentInfo->Orientation) };
-
-		//Cross < 0.f -> left, Dot > 0.5f half of the positive side
-		return Elite::Cross(startVector, currentVector) < -0.2f && Elite::Dot(startVector, currentVector) > 0.5f;
+		return !(*pIsRotationCompleted);
 	}
 
 	bool HasNoWeapon(Elite::Blackboard* pBlackboard)

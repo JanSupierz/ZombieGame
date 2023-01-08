@@ -86,153 +86,143 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 
 	//Create BehaviorTree
 	m_pBehaviourTree = new Elite::BehaviorTree(m_pBlackboard,
-	new Elite::BehaviorSelector(
-	{
-		//Item usage
-		new Elite::BehaviorAction(BT_Actions::HandleFoodAndMedkitUsage),
-		//Enemies
 		new Elite::BehaviorSelector(
 		{
-			//Enemy in view
+			//Item usage
+			new Elite::BehaviorAction(BT_Actions::HandleFoodAndMedkitUsage),
+			//Purge Zones
 			new Elite::BehaviorSequence(
 			{
-				new Elite::BehaviorConditional(BT_Conditions::IsEnemyInVector),
-				new Elite::BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
-				new Elite::BehaviorSelector(
-				{
-					//Agent has no weapon
-					new Elite::BehaviorSequence(
-					{
-						new Elite::BehaviorConditional(BT_Conditions::HasNoWeapon),
-						new Elite::BehaviorAction(BT_Actions::SetRunning),
-						new Elite::BehaviorAction(BT_Actions::ChangeToFleeAndFaceTarget)
-					}),
-					//Aiming finished
-					new Elite::BehaviorSequence(
-					{
-						new Elite::BehaviorConditional(BT_Conditions::IsAimingFinished),
-						new Elite::BehaviorAction(BT_Actions::HandleShooting)
-					}),
-					//Aim at the target
-					new Elite::BehaviorAction(BT_Actions::ChangeToFaceTarget)
-				}),
-			}),
-			//Attack from behind
-			new Elite::BehaviorSequence(
-			{
-				new Elite::BehaviorAction(BT_Actions::HandleAttackFromBehind),
+				new Elite::BehaviorConditional(BT_Conditions::IsInPurgeZone),
 				new Elite::BehaviorAction(BT_Actions::SetRunning),
-				new Elite::BehaviorAction(BT_Actions::ChangeToFleeAndFaceTarget)
-			})
-		}),
-		//Purge Zones
-		new Elite::BehaviorSequence(
-		{
-			new Elite::BehaviorConditional(BT_Conditions::IsInPurgeZone),
-			new Elite::BehaviorAction(BT_Actions::SetRunning),
-			new Elite::BehaviorAction(BT_Actions::SetClosestPurgeZoneAsTarget),
-			new Elite::BehaviorAction(BT_Actions::ChangeToFleeTarget)
-		}),
-		//Items
-		new Elite::BehaviorSequence(
-		{
-			new Elite::BehaviorConditional(BT_Conditions::IsNotVisitedItemInVector),
-			new Elite::BehaviorAction(BT_Actions::SetClosestItemAsTarget),
+				new Elite::BehaviorAction(BT_Actions::SetClosestPointOutsidePurgeZoneAsTarget),
+				new Elite::BehaviorAction(BT_Actions::ChangeToSeekTarget)
+			}),
+			//Enemies
 			new Elite::BehaviorSelector(
 			{
-					//Item in grab range
+					//Enemy in view
 					new Elite::BehaviorSequence(
 					{
-						new Elite::BehaviorConditional(BT_Conditions::IsItemInGrabRange),
+						new Elite::BehaviorConditional(BT_Conditions::IsEnemyInVector),
+						new Elite::BehaviorAction(BT_Actions::SetClosestEnemyAsTarget),
 						new Elite::BehaviorSelector(
 						{
-								//Grab usefull item
+								//Agent has no weapon
 								new Elite::BehaviorSequence(
 								{
-									new Elite::BehaviorConditional(BT_Conditions::IsItemNotGarbage),
-									new Elite::BehaviorAction(BT_Actions::HandleItemGrabbing)
+									new Elite::BehaviorConditional(BT_Conditions::HasNoWeapon),
+									new Elite::BehaviorAction(BT_Actions::SetRunning),
+									new Elite::BehaviorAction(BT_Actions::ChangeToFleeAndFaceTarget)
 								}),
-							//Destroy not usefull item
-							new Elite::BehaviorAction(BT_Actions::DestroyItem)
-						})
-					}),
-				//Run to nearest item
-				new Elite::BehaviorAction(BT_Actions::ChangeToFaceAndSeekTarget)
-			}),
-		}),
-		//Houses
-		new Elite::BehaviorSequence(
-		{
-			new Elite::BehaviorConditional(BT_Conditions::IsNotVisitedHouseInVector),
-			new Elite::BehaviorAction(BT_Actions::SetClosestNotVisitedHouseAsTarget),
-			new Elite::BehaviorSelector(
-			{
-				//Explore the building
-				new Elite::BehaviorSequence(
-				{
-					new Elite::BehaviorConditional(BT_Conditions::IsAgentInsideTargetHouse),
-					new Elite::BehaviorSelector(
-					{
-						//Building needs exploration
-						new Elite::BehaviorSequence(
-						{
-							new Elite::BehaviorConditional(BT_Conditions::IsNotVisitedSearchPointInHouse),
-							new Elite::BehaviorAction(BT_Actions::SetClosestNotVisitedSearchPointAsTarget),
-							new Elite::BehaviorSelector(
+							//Aiming finished
+							new Elite::BehaviorSequence(
 							{
-								//Has arrived
-								new Elite::BehaviorSequence(
-								{
-									new Elite::BehaviorConditional(BT_Conditions::HasArrivedAtLocation),
-									new Elite::BehaviorSelector(
-									{
-										//Start Rotating
-										new Elite::BehaviorSequence(
-										{
-											new Elite::BehaviorConditional(BT_Conditions::IsAgentNotRotating),
-											new Elite::BehaviorAction(BT_Actions::InitializeRotating),
-											new Elite::BehaviorAction(BT_Actions::ChangeToRotateClockWise)
-										}),
-										//Stop Rotating
-										new Elite::BehaviorSequence(
-										{
-											new Elite::BehaviorConditional(BT_Conditions::IsRotationCompleted),
-											new Elite::BehaviorAction(BT_Actions::SetRotationCompleted),
-											new Elite::BehaviorAction(BT_Actions::MarkSearchPointAsVisited)
-										}),
-										//Keep rotating
-										new Elite::BehaviorAction(BT_Actions::ChangeToRotateClockWise)
-									})
-								}),
-								//Run to nearest search point
-								new Elite::BehaviorAction(BT_Actions::ChangeToSeekTarget)
+								new Elite::BehaviorConditional(BT_Conditions::IsAimingFinished),
+								new Elite::BehaviorAction(BT_Actions::HandleShooting)
 							}),
+							//Aim at the target
+							new Elite::BehaviorAction(BT_Actions::ChangeToFaceTarget)
 						}),
-						//Mark house as visited 
-						new Elite::BehaviorAction(BT_Actions::MarkHouseAsVisited)
-					})
-				}),
-				//Run to nearest house
-				new Elite::BehaviorAction(BT_Actions::ChangeToSeekTarget)
-			})
-		}),
-		//Fallback to exploration
-		new Elite::BehaviorSequence(
-		{
-			new Elite::BehaviorAction(BT_Actions::SetBestCellAsTarget),
-			new Elite::BehaviorSelector(
-			{
+					}),
+				//Attack from behind
 				new Elite::BehaviorSequence(
 				{
-					new Elite::BehaviorConditional(BT_Conditions::ShouldLookBack),
-					new Elite::BehaviorAction(BT_Actions::ChangeToSeekTargetAndFaceBack)
-				}),
-				new Elite::BehaviorAction(BT_Actions::ChangeToWanderAndSeekTarget)
+					new Elite::BehaviorAction(BT_Actions::HandleAttackFromBehind),
+					new Elite::BehaviorAction(BT_Actions::SetRunning),
+					new Elite::BehaviorAction(BT_Actions::ChangeToFleeAndFaceTarget)
+				})
 			}),
-
-		})
-		})
-	);
+			//Houses
+			new Elite::BehaviorSequence(
+			{
+				new Elite::BehaviorConditional(BT_Conditions::IsNotVisitedHouseInVector),
+				new Elite::BehaviorAction(BT_Actions::SetClosestNotVisitedHouseAsTarget),
+				new Elite::BehaviorSelector(
+				{
+					//Run to nearest house
+					new Elite::BehaviorSequence(
+					{
+						new Elite::BehaviorConditional(BT_Conditions::IsAgentNotInsideTargetHouse),
+						new Elite::BehaviorAction(BT_Actions::ChangeToSeekTarget)
+					}),
+					//Check the search points
+					new Elite::BehaviorSequence(
+					{
+						new Elite::BehaviorConditional(BT_Conditions::IsNotVisitedSearchPointInHouse),
+						new Elite::BehaviorAction(BT_Actions::SetClosestNotVisitedSearchPointAsTarget),
+						new Elite::BehaviorSelector(
+						{
+							//Rotate
+							new Elite::BehaviorSequence(
+							{
+								new Elite::BehaviorConditional(BT_Conditions::IsRotationNotCompleted),
+								new Elite::BehaviorSelector(
+								{
+									new Elite::BehaviorSequence(
+									{
+										new Elite::BehaviorConditional(BT_Conditions::HasNotArrivedAtLocation),
+										new Elite::BehaviorAction(BT_Actions::ChangeToSeekAndFaceTarget)
+									}),
+									new Elite::BehaviorSequence(
+									{
+										new Elite::BehaviorConditional(BT_Conditions::IsAgentNotRotating),
+										new Elite::BehaviorAction(BT_Actions::InitializeRotating),
+										new Elite::BehaviorAction(BT_Actions::ChangeToRotateClockWise)
+									}),
+									new Elite::BehaviorAction(BT_Actions::UpdateRotation),
+									new Elite::BehaviorAction(BT_Actions::ChangeToRotateClockWise)
+								})
+							}),
+							//Check found items
+							new Elite::BehaviorSequence(
+							{
+								new Elite::BehaviorConditional(BT_Conditions::IsNotVisitedItemInVector),
+								new Elite::BehaviorAction(BT_Actions::SetClosestItemAsTarget),
+								new Elite::BehaviorSelector(
+								{
+									//Run to nearest item
+									new Elite::BehaviorSequence(
+									{
+										new Elite::BehaviorConditional(BT_Conditions::IsItemNotInGrabRange),
+										new Elite::BehaviorAction(BT_Actions::ChangeToFaceAndSeekTarget)
+									}),
+									//Grab usefull item
+									new Elite::BehaviorSequence(
+									{
+										new Elite::BehaviorConditional(BT_Conditions::IsItemNotGarbage),
+										new Elite::BehaviorAction(BT_Actions::HandleItemGrabbing)
+									}),
+									//Destroy not usefull item
+									new Elite::BehaviorAction(BT_Actions::DestroyItem)
+								}),
+							}),
+							new Elite::BehaviorSequence(
+							{
+							new Elite::BehaviorAction(BT_Actions::ResetRotation),
+							new Elite::BehaviorAction(BT_Actions::MarkSearchPointAsVisited)
+							})
+						}),
+					}),
+					//Mark house as visited 
+					new Elite::BehaviorAction(BT_Actions::MarkHouseAsVisited)
+				})
+			}),
+			//Fallback to exploration
+			new Elite::BehaviorSequence(
+			{
+				new Elite::BehaviorAction(BT_Actions::SetBestCellAsTarget),
+				new Elite::BehaviorSelector(
+				{
+					new Elite::BehaviorSequence(
+					{
+						new Elite::BehaviorConditional(BT_Conditions::ShouldLookBack),
+						new Elite::BehaviorAction(BT_Actions::ChangeToSeekTargetAndFaceBack)
+					}),
+					new Elite::BehaviorAction(BT_Actions::ChangeToWanderAndSeekTarget)
+				}),
+			}) 
+		}));
 }
 
 //Called only once
@@ -383,9 +373,9 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 
 				PurgeZone* pPurgeZone{ new PurgeZone };
 				pPurgeZone->Center = purgeZoneInfo.Center;
-				pPurgeZone->Radius = purgeZoneInfo.Radius;
+				pPurgeZone->Radius = purgeZoneInfo.Radius + 10.f;
 				pPurgeZone->ZoneHash = purgeZoneInfo.ZoneHash;
-				pPurgeZone->EstimatedLifeTime = 10.f;
+				pPurgeZone->EstimatedLifeTime = 6.f;
 
 				m_pPurgeZones.push_back(pPurgeZone);
 			}
@@ -409,7 +399,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 				for (House* pHouse : m_pHouses)
 				{
 					distance = pHouse->Center - e.Location;
-					if (distance.x < abs(pHouse->Size.x / 2.f) && distance.y < abs(pHouse->Size.y / 2.f))
+					if (abs(distance.x) < pHouse->Size.x / 2.f && abs(distance.y) < pHouse->Size.y / 2.f)
 					{
 						pItem->IsVisited = pHouse->IsVisited;
 						pItem->pHouse = pHouse;
@@ -429,28 +419,30 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 		}
 	}
 
-	//Revisit houses after 180 sec
+	//Revisit houses after some time
 	for (auto* pHouse : m_pHouses)
 	{
-		if (pHouse->IsVisited)
+		if (!pHouse->IsVisited) continue;
+	
+		pHouse->TimeSinceVisit += dt;
+
+		if (pHouse->TimeSinceVisit > 300.f)
 		{
-			pHouse->TimeSinceVisit += dt;
+			pHouse->IsVisited = false;
 
-			if (pHouse->TimeSinceVisit > 180.f)
+			for (auto* pItem : m_pItems)
 			{
-				pHouse->IsVisited = false;
-
-				for (auto* pItem : m_pItems)
+				if (pItem->pHouse == pHouse)
 				{
 					pItem->IsVisited = false;
 				}
-
-				for (auto* pSearchPoint : pHouse->pSearchPoints)
-				{
-					pSearchPoint->IsVisited = false;
-				}
-				pHouse->TimeSinceVisit = 0.f;
 			}
+
+			for (auto* pSearchPoint : pHouse->pSearchPoints)
+			{
+				pSearchPoint->IsVisited = false;
+			}
+			pHouse->TimeSinceVisit = 0.f;
 		}
 	}
 
@@ -632,6 +624,7 @@ Elite::Blackboard* Plugin::CreateBlackboard()
 	//Booleans
 	pBlackboard->AddData("ShouldRun", &m_ShouldRun);
 	pBlackboard->AddData("IsRotating", &m_IsRotating);
+	pBlackboard->AddData("IsRotationCompleted", &m_IsRotationCompleted);
 
 	//Cells
 	pBlackboard->AddData("CurrentCell", &m_pCurrentGridElement);

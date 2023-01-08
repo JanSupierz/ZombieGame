@@ -57,7 +57,8 @@ private:
 
 	//AgentInfo
 	AgentInfo m_AgentInfo{};
-	
+	bool m_ShouldRun{ false };
+
 	//Vectors
 	std::vector <Item*> m_pItems{};
 	std::vector <PurgeZone*> m_pPurgeZones{};
@@ -65,15 +66,17 @@ private:
 	std::vector<GridElement*> m_pGrid{};
 	std::vector<EnemyInfo> m_Enemies{};
 	std::vector<std::pair<int, InventoryItemType>> m_Inventory{};
-	float m_CellSize{};
 
+	//Rotation
 	bool m_IsRotating{false};
+	bool m_IsRotationCompleted{ false };
 	float m_StartOrientation{};
 
+	//Grid
 	GridElement* m_pCurrentGridElement{};
+	float m_CellSize{};
 
-	bool m_ShouldRun{false};
-
+	//Timers
 	float m_DeltaTime{};
 	float m_WalkingTime{};
 	float m_AlertedTime{};
