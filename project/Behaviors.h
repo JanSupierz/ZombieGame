@@ -115,6 +115,7 @@ namespace BT_Actions
 
 	Elite::BehaviorState UpdateRotation(Elite::Blackboard* pBlackboard)
 	{
+
 		bool* pIsCompleted{};
 
 		if (pBlackboard->GetData("IsRotationCompleted", pIsCompleted) == false)
@@ -1120,6 +1121,36 @@ namespace BT_Actions
 			return Elite::BehaviorState::Failure;
 		}
 	}
+
+	Elite::BehaviorState ChangeToArriveAtTarget(Elite::Blackboard* pBlackboard)
+	{
+		ISteeringBehavior* pCurrentSteering;
+
+		Arrive* pArrive;
+		if (pBlackboard->GetData("Arrive", pArrive) == false || pArrive == nullptr)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		Elite::Vector2 target;
+		if (pBlackboard->GetData("Target", target) == false)
+		{
+			return Elite::BehaviorState::Failure;
+		}
+
+		pArrive->SetTarget(target);
+		pCurrentSteering = pArrive;
+
+		if (pBlackboard->ChangeData("CurrentSteering", pCurrentSteering))
+		{
+			return Elite::BehaviorState::Success;
+		}
+		else
+		{
+			return Elite::BehaviorState::Failure;
+		}
+	}
+
 	//Purge Zones
 	Elite::BehaviorState SetClosestPointOutsidePurgeZoneAsTarget(Elite::Blackboard* pBlackboard)
 	{
@@ -1374,6 +1405,14 @@ namespace BT_Conditions
 
 	bool IsNotVisitedItemInVector(Elite::Blackboard* pBlackboard)
 	{
+		bool* pIsRotating{};
+		if (pBlackboard->GetData("IsRotating", pIsRotating) == false)
+		{
+			return false;
+		}
+
+		(*pIsRotating) = false;
+
 		std::vector<Item*>* pItemVector;
 
 		if (pBlackboard->GetData("ItemVector", pItemVector) == false || pItemVector == nullptr)
@@ -1568,9 +1607,8 @@ namespace BT_Conditions
 
 	bool IsAgentNotRotating(Elite::Blackboard* pBlackboard)
 	{
-
 		bool* pIsRotating{};
-		if (pBlackboard->GetData("IsRotating", pIsRotating) == false || pIsRotating == nullptr)
+		if (pBlackboard->GetData("IsRotating", pIsRotating) == false)
 		{
 			return false;
 		}

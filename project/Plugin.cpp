@@ -74,6 +74,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 
 	//Called when the plugin is loaded
 	m_pSeekBehaviour = new Seek();
+	m_pArriveBehaviour = new Arrive();
 	m_pFleeBehaviour = new Flee();
 	m_pWanderBehaviour = new Wander();
 	m_pFaceBehaviour = new Face();
@@ -162,7 +163,7 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 									new Elite::BehaviorSequence(
 									{
 										new Elite::BehaviorConditional(BT_Conditions::HasNotArrivedAtLocation),
-										new Elite::BehaviorAction(BT_Actions::ChangeToSeekTarget)
+										new Elite::BehaviorAction(BT_Actions::ChangeToArriveAtTarget)
 									}),
 									new Elite::BehaviorSequence(
 									{
@@ -170,8 +171,11 @@ void Plugin::Initialize(IBaseInterface* pInterface, PluginInfo& info)
 										new Elite::BehaviorAction(BT_Actions::InitializeRotating),
 										new Elite::BehaviorAction(BT_Actions::ChangeToRotateClockWise)
 									}),
+									new Elite::BehaviorSequence(
+									{
 									new Elite::BehaviorAction(BT_Actions::UpdateRotation),
 									new Elite::BehaviorAction(BT_Actions::ChangeToRotateClockWise)
+									})
 								})
 							}),
 							//Check found items
@@ -230,7 +234,7 @@ void Plugin::DllShutdown()
 {
 	//Called wheb the plugin gets unloaded
 	delete m_pBehaviourTree;
-
+	delete m_pArriveBehaviour;
 	delete m_pFleeBehaviour;
 	delete m_pSeekBehaviour;
 	delete m_pWanderBehaviour;
@@ -239,6 +243,7 @@ void Plugin::DllShutdown()
 	delete m_pWanderAndSeekBehaviour;
 	delete m_pFaceAndSeekBehaviour;
 	delete m_pSeekAndFaceBehaviour;
+
 	for (House* pHouse : m_pHouses)
 	{
 		for (SearchPoint* pSearchPoint :pHouse->pSearchPoints)
@@ -387,7 +392,9 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 
 			auto compareItem = [&](Item* pItemInVec) -> bool { return pItemInVec->entityInfo.Location == e.Location; };
 
-			if (std::find_if(m_pItems.begin(), m_pItems.end(), compareItem) == m_pItems.end())
+			auto iterator = std::find_if(m_pItems.begin(), m_pItems.end(), compareItem);
+
+			if (iterator == m_pItems.end())
 			{
 				std::cout << "New item\n";
 
@@ -409,6 +416,11 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 
 				m_pItems.push_back(pItem);
 			}
+			else
+			{
+				(*iterator)->entityInfo = e;
+				(*iterator)->itemInfo = itemInfo;
+			}
 		}
 		else if (e.Type == eEntityType::ENEMY)
 		{
@@ -426,7 +438,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 	
 		pHouse->TimeSinceVisit += dt;
 
-		if (pHouse->TimeSinceVisit > 300.f)
+		if (pHouse->TimeSinceVisit > 350.f)
 		{
 			pHouse->IsVisited = false;
 
@@ -442,6 +454,7 @@ SteeringPlugin_Output Plugin::UpdateSteering(float dt)
 			{
 				pSearchPoint->IsVisited = false;
 			}
+
 			pHouse->TimeSinceVisit = 0.f;
 		}
 	}
@@ -612,6 +625,7 @@ Elite::Blackboard* Plugin::CreateBlackboard()
 	pBlackboard->AddData("Seek", m_pSeekBehaviour);
 	pBlackboard->AddData("Face", m_pFaceBehaviour);
 	pBlackboard->AddData("Flee", m_pFleeBehaviour);
+	pBlackboard->AddData("Arrive", m_pArriveBehaviour);
 	pBlackboard->AddData("SeekAndFace", m_pSeekAndFaceBehaviour);
 	pBlackboard->AddData("WanderAndSeek", m_pWanderAndSeekBehaviour);
 	pBlackboard->AddData("FaceAndSeek", m_pFaceAndSeekBehaviour);

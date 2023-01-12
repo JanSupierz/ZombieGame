@@ -7,6 +7,7 @@ class IBaseInterface;
 class IExamInterface;
 
 class Seek;
+class Arrive;
 class Wander;
 class Face;
 class Flee;
@@ -45,6 +46,7 @@ private:
 	Elite::BehaviorTree* m_pBehaviourTree{};
 	Elite::Blackboard* m_pBlackboard{};
 
+	Arrive* m_pArriveBehaviour{};
 	Seek* m_pSeekBehaviour{};
 	Wander* m_pWanderBehaviour{};
 	Face* m_pFaceBehaviour{};
